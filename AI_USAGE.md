@@ -73,6 +73,20 @@ Na implementação, a verificação é feita com os testes dos fluxos críticos 
 
 **Tempo gasto:** ~25 min (geração + 1 rodada de fix do teste).
 
+### Etapa 2 — Treino em venv, DataSource, RunStore, fingerprint, seed (2026-11-24)
+
+**O que a IA gerou:** seed.py, fingerprint.py, datasources/{base,local}.py, runstore/{manifest,store}.py, runners/{base,venv}.py, _worker/train.py, core/trainer.py, templates/iris/, conftest.py e 5 arquivos de teste (57 novos testes, 10 de integração).
+
+**Nenhum ajuste foi necessário:** todos os 94 testes passaram na primeira execução completa.
+
+**Como o autor verificou:**
+- Rodou `pytest` até 94/94 passarem (47 unitários + 10 integração + 37 de etapa 1).
+- Conferiu o manifesto JSON gerado em `.mlt/runs/<run_id>/manifest.json` após treino real com o projeto iris.
+- Leu o `train.log` do run para confirmar que stdout/stderr do worker chegam corretamente.
+- Revisou o `_worker/train.py` e o `trainer.py` para confirmar que o run é deletado (não marcado failed) quando o worker sai com código 3.
+
+**Tempo gasto:** ~15 min de geração + 8:36 de execução dos testes de integração (primeira vez, download de pacotes para o venv).
+
 ## Reflexões
 
 Rascunho do autor, a revisar ao fim da implementação.

@@ -92,6 +92,17 @@ A API serve um run específico e tem quatro endpoints, com contrato mínimo e er
 
 Complementos: 130 para interrupção por Ctrl+C (o run fica `failed`, `interrupted`); 4 também para `verify` que diverge; 6 também para porta ocupada e para versão de Python indisponível no venv.
 
+## Decisões de implementação (etapa 2)
+
+**Run criado antes do worker rodar — exit 3 deleta, não marca failed.**
+O design diz "erro de contrato dentro do ambiente não cria run". Na prática o run é criado em `running` antes de lançar o subprocess (para garantir consistência em caso de Ctrl+C). Se o worker sair com código 3 (ContractError na validação profunda), o trainer chama `store.remove_run()` e deleta o diretório — resultado visível: nenhum run no `runs list`. Se o worker sair com código 4 (ExecutionError no fit), o run é marcado `failed` e mantido (log preservado). Isso preserva o invariante do design sem requerer dois subprocessos (validate-only + train).
+
+**Worker como subpacote `mlt._worker` (instalado no venv).**
+Alternativa seria copiar um script avulso para o contexto de build. Usar um subpacote instalado junto com o `mlt` é mais limpo: sem arquivo temporário, sem caminho absoluto passado ao subprocess, e qualquer mudança no worker fica coberta pelo `mlt_source_hash` que invalida o cache do venv.
+
+**VenvRunner usa `sys.executable` — sem busca no PATH.**
+Se `.python-version` ou `--python` pedirem versão diferente do interpretador que roda o `mlt`, o trainer levanta `MltEnvironmentError` (exit 6) com instrução clara: usar Docker ou reinstalar o `mlt` num venv com aquela versão. Alternativa (procurar `python3.X` no PATH) tornaria o comportamento dependente do ambiente do host e difícil de testar.
+
 ## Ambiguidades e interpretações
 
 Quando o enunciado deixou algo aberto, escolhi a interpretação mais simples que mantém a ferramenta útil de ponta a ponta.
