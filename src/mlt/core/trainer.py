@@ -62,6 +62,8 @@ def train(
     force: bool = False,
     env: Mapping[str, str] | None = None,
     on_slow_build: "Callable[[], None] | None" = None,
+    verification_of: str | None = None,
+    _store_project_dir: Path | None = None,
 ) -> str:
     """Run a training job and return the run_id.
 
@@ -83,6 +85,7 @@ def train(
         env = os.environ
 
     project_dir = Path(project_dir).resolve()
+    store_project_dir = Path(_store_project_dir).resolve() if _store_project_dir else project_dir
 
     # 1. Static validation -------------------------------------------------
     validate_contract(project_dir)
@@ -118,7 +121,7 @@ def train(
     )
 
     # 5. Idempotency -------------------------------------------------------
-    store = RunStore(project_dir)
+    store = RunStore(store_project_dir)
     if not force:
         existing = store.find_by_fingerprint(fingerprint)
         if existing is not None:
@@ -151,6 +154,7 @@ def train(
             "isolation": runner_instance.isolation,
             "env_hash": eh,
         },
+        verification_of=verification_of,
     )
     run_dir = store.create_run(partial)
 

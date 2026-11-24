@@ -196,6 +196,7 @@ class Manifest:
         inputs: dict,
         fingerprint: str,
         environment: dict,
+        verification_of: str | None = None,
     ) -> Manifest:
         """Build a partial manifest (status: running) for a new run."""
         return cls(
@@ -211,6 +212,6 @@ class Manifest:
                 "environment": environment,
                 "outputs": None,
                 "error": None,
-                "verification_of": None,
+                "verification_of": verification_of,
             }
         )
