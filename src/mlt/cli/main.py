@@ -2,6 +2,10 @@
 
 The CLI is a thin layer: it parses arguments, calls mlt.core, and translates
 MltError exceptions into the correct exit codes. All logic lives in the core.
+
+``_MltGroup`` overrides ``invoke`` so that MltError is caught and translated
+to the right exit code whether the CLI is called via ``main()`` (production) or
+directly via Click's CliRunner (tests).
 """
 
 import subprocess
@@ -43,7 +47,22 @@ def _version_callback(ctx: click.Context, _param: click.Parameter, value: bool) 
     ctx.exit()
 
 
-@click.group(invoke_without_command=True)
+class _MltGroup(click.Group):
+    """Click Group that maps MltError exceptions to their correct exit codes.
+
+    Overriding ``invoke`` means the mapping works in both production (via
+    ``main()``) and in tests that call ``cli`` through Click's CliRunner.
+    """
+
+    def invoke(self, ctx: click.Context):
+        try:
+            return super().invoke(ctx)
+        except MltError as exc:
+            click.echo(f"error: {exc.message}", err=True)
+            ctx.exit(int(exc.exit_code))
+
+
+@click.group(cls=_MltGroup, invoke_without_command=True)
 @click.option(
     "--version",
     is_flag=True,
@@ -59,21 +78,22 @@ def cli(ctx: click.Context) -> None:
         click.echo(ctx.get_help())
 
 
+# Register subcommands.
+from mlt.cli.init_cmd import init_cmd  # noqa: E402
+from mlt.cli.check_cmd import check_cmd  # noqa: E402
+from mlt.cli.train_cmd import train_cmd  # noqa: E402
+from mlt.cli.runs_cmd import runs_cmd  # noqa: E402
+from mlt.cli.diff_cmd import diff_cmd  # noqa: E402
+from mlt.cli.verify_cmd import verify_cmd  # noqa: E402
+
+cli.add_command(init_cmd)
+cli.add_command(check_cmd)
+cli.add_command(train_cmd)
+cli.add_command(runs_cmd)
+cli.add_command(diff_cmd)
+cli.add_command(verify_cmd)
+
+
 def main() -> None:
-    """Entry point that maps MltError exceptions to exit codes."""
-    try:
-        cli(standalone_mode=False)
-    except MltError as exc:
-        click.echo(f"error: {exc.message}", err=True)
-        sys.exit(int(exc.exit_code))
-    except click.ClickException as exc:
-        exc.show()
-        sys.exit(exc.exit_code)
-    except click.exceptions.Exit as exc:
-        sys.exit(exc.code)
-    except click.exceptions.Abort:
-        click.echo("Aborted.", err=True)
-        sys.exit(int(ExitCode.INTERRUPTED))
-    except Exception as exc:
-        click.echo(f"error: {exc}", err=True)
-        sys.exit(int(ExitCode.UNEXPECTED_ERROR))
+    """Entry point registered in pyproject.toml."""
+    cli(standalone_mode=True)
