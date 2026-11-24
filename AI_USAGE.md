@@ -87,6 +87,28 @@ Na implementação, a verificação é feita com os testes dos fluxos críticos 
 
 **Tempo gasto:** ~15 min de geração + 8:36 de execução dos testes de integração (primeira vez, download de pacotes para o venv).
 
+### Etapa 3 — CLI completa: init, check, train, runs list/show, diff, verify (2026-11-24)
+
+**O que a IA gerou:** discovery.py, init_cmd.py, check_cmd.py, train_cmd.py, runs_cmd.py, diff_cmd.py, verify_cmd.py, seis arquivos de teste (42 novos testes) e as modificações em main.py, trainer.py e manifest.py.
+
+**Ajustes feitos durante a implementação:**
+
+| O que a IA fez | O que foi ajustado | Motivo |
+| --- | --- | --- |
+| Tratamento de erros em `main()` apenas | Movido para `_MltGroup.invoke` | Com CliRunner invocando `cli` diretamente, `MltError` não era capturado e o exit_code vinha como 1 em vez do código correto |
+| `test_diff_accepts_prefix` usando `run_id[:8]` como prefixo | Substituído por `test_diff_latest_alias` | Os primeiros 8 chars do run_id são a data (`20261124`), idêntica em todos os runs do mesmo dia; o teste falhava por prefixo ambíguo |
+| `test_runs_list_no_runs` sem cd para tmp_path | Corrigido para fazer `os.chdir(tmp_path)` | Sem isso o teste dependia do cwd não ter runs, o que poderia falhar em paralelo com outros testes |
+| `CliRunner(mix_stderr=False)` | Removido o argumento | A versão do Click instalada não suporta `mix_stderr` no construtor |
+
+**Nenhuma mudança de contrato ou design foi necessária.**
+
+**Como o autor verificou:**
+- Rodou `pytest` até 136/136 passarem (84 anteriores + 42 novos + 10 de integração originais).
+- Executou o fluxo ponta a ponta manualmente: `mlt init /tmp/demo --template iris`, `mlt check /tmp/demo`, `mlt train /tmp/demo`, `mlt runs list`, `mlt runs show latest`, `mlt diff <id1> <id2>`, `mlt verify <id>`.
+- Conferiu que `mlt runs list` exibe `[V]` no run de verificação e que `verification_of` está preenchido no manifesto.
+
+**Tempo gasto:** ~25 min de geração + 11:42 de execução dos testes (136 no total; os de integração reutilizaram o cache do venv).
+
 ## Reflexões
 
 Rascunho do autor, a revisar ao fim da implementação.

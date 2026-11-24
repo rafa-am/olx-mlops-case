@@ -103,6 +103,23 @@ Alternativa seria copiar um script avulso para o contexto de build. Usar um subp
 **VenvRunner usa `sys.executable` — sem busca no PATH.**
 Se `.python-version` ou `--python` pedirem versão diferente do interpretador que roda o `mlt`, o trainer levanta `MltEnvironmentError` (exit 6) com instrução clara: usar Docker ou reinstalar o `mlt` num venv com aquela versão. Alternativa (procurar `python3.X` no PATH) tornaria o comportamento dependente do ambiente do host e difícil de testar.
 
+## Decisões de implementação (etapa 3)
+
+**Tratamento de erros na CLI — `_MltGroup.invoke` em vez de `main()`.**
+A abordagem inicial capturava `MltError` somente em `main()`. Em testes via `CliRunner` que invocam `cli` diretamente, o erro não era capturado pelo Click e o `result.exit_code` vinha como 1 (exceção genérica) em vez do código correto. A solução foi criar uma subclasse `_MltGroup(click.Group)` que sobrescreve `invoke` e captura `MltError`, traduzindo para `ctx.exit(code)`. Com isso, o código de saída correto é retornado tanto na execução real (via `main()` em standalone_mode=True) quanto nos testes via CliRunner.
+
+**Descoberta de projeto em dois modos.**
+`train` e `check` recebem o caminho explicitamente e exigem `model.py` (erro 2 se ausente). `runs`, `diff` e `verify` sobem diretórios a partir do cwd até encontrar `model.py` ou `.mlt/`, com fallback para o cwd. Essa distinção reflete o design: os comandos de gestão de runs funcionam de dentro do projeto (como o `git`), enquanto `train` e `check` precisam de um alvo explícito para evitar treinar o projeto errado por acidente.
+
+**`verify` guarda o run de verificação no store do projeto original, não em `code/`.**
+O `verify` treina a partir de `code/` (snapshot do run original), mas armazenar o run em `code/.mlt/` tornaria a verificação invisível no `mlt runs list` do projeto. A solução foi adicionar o parâmetro `_store_project_dir` ao `trainer.train()`: o RunStore é inicializado com o projeto original, e o run de verificação aparece na listagem com o marcador `[V]` e com `verification_of` preenchido no manifesto. O parâmetro é prefixado com `_` para sinalizar uso interno.
+
+**`verify` recusa se o hash dos dados mudou — saída 8.**
+Sem `--snapshot-data`, a reprodutibilidade dos dados é de identidade. Se o hash atual diverge do manifesto original, o `verify` recusa com `OperationRefusedError` (exit 8) e orienta o usuário a usar `mlt diff` ou `--snapshot-data`. Alternativa seria treinar assim mesmo e avisar — mas isso produziria um run com dados diferentes, o que contradiz o objetivo do verify.
+
+**`--rebuild` adiado.**
+O `--rebuild` força a reconstrução do ambiente cacheado no venv. A implementação exigiria mudanças no `VenvRunner` (deletar o diretório do env e recriar) além da flag na CLI. Como é um caso de borda operacional (ambiente corrompido) que não afeta a correção, foi adiado. O `--force` cobre o caso mais comum (retreinar ignorando a idempotência).
+
 ## Ambiguidades e interpretações
 
 Quando o enunciado deixou algo aberto, escolhi a interpretação mais simples que mantém a ferramenta útil de ponta a ponta.
