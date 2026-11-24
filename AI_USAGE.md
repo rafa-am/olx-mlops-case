@@ -6,7 +6,7 @@ Usei o Claude em conversa para planejar o design antes de escrever código, e qu
 
 - **Claude (chat):** levantar alternativas e custos, detalhar contratos, redigir propostas.
 - **Quadros brancos:** manter o desenho vivo (fluxo, contratos, dados, manifesto, API, testes).
-- **Implementação:** a preencher quando houver código.
+- **Implementação:** Claude Code (CLI) gerou o código da etapa 1 sob revisão do autor.
 
 ## Como a IA entrou no processo
 
@@ -58,7 +58,20 @@ Também corrigi erros de layout da IA nos quadros (texto transbordando as seçõ
 
 No design, nenhuma proposta virou decisão sem ser questionada (veja a tabela acima).
 
-Na implementação, a verificação será feita com os testes dos fluxos críticos e com a execução do exemplo ponta a ponta. Os detalhes ficam para preencher após a implementação.
+Na implementação, a verificação é feita com os testes dos fluxos críticos e com a execução do exemplo ponta a ponta.
+
+### Etapa 1 — Esqueleto, MLModel, contrato e CLI (2026-11-24)
+
+**O que a IA gerou:** pyproject.toml, src/mlt/{core/errors.py, core/contract.py, model/base.py, model/sklearn.py, cli/main.py} e os quatro arquivos de teste (37 testes).
+
+**Ajuste feito durante a implementação:** o teste `test_no_args_shows_help` falhou com exit code 2 porque Click retorna 2 para grupo sem subcomando. A IA corrigiu adicionando `invoke_without_command=True` e um callback que exibe o help; nenhuma mudança de contrato.
+
+**Como o autor verificou:**
+- Rodou `pytest` até 37/37 passarem.
+- Executou `mlt --version` manualmente e conferiu os três campos (versão, python, docker).
+- Leu os arquivos gerados e conferiu que `MLModel` não tem imports externos e que os imports de joblib/pandas em `SklearnModel` são lazy.
+
+**Tempo gasto:** ~25 min (geração + 1 rodada de fix do teste).
 
 ## Reflexões
 
