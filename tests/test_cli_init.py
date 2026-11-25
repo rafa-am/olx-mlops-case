@@ -66,6 +66,17 @@ def test_init_accepts_dir_with_only_git(tmp_path):
     assert r.exit_code == 0, r.output
 
 
+def test_init_accepts_dir_with_arbitrary_dotfiles(tmp_path):
+    """Any dot-prefixed entry (.mypy_cache, .python-version, …) should not block init."""
+    dest = tmp_path / "proj"
+    dest.mkdir()
+    (dest / ".mypy_cache").mkdir()
+    (dest / ".python-version").write_text("3.12\n")
+    r = invoke("init", str(dest))
+    assert r.exit_code == 0, r.output
+    assert (dest / "model.py").exists()
+
+
 def test_init_accepts_empty_existing_dir(tmp_path):
     dest = tmp_path / "empty"
     dest.mkdir()

@@ -34,10 +34,10 @@ def init_cmd(directory: str, template: str) -> None:
     """Create a new mlt project from a template."""
     dest = Path(directory).resolve()
 
-    # Allow directories that only contain "safe to coexist" entries such as
-    # .venv/ (mlt itself installed locally) or .git/ (repo already initialised).
-    _SAFE = {".venv", ".git", ".DS_Store"}
-    if dest.exists() and any(p.name not in _SAFE for p in dest.iterdir()):
+    # Allow directories that only contain hidden entries (names starting with
+    # "."), such as .venv/, .git/, .python-version, etc.  Visible files or
+    # folders indicate a project is already set up there.
+    if dest.exists() and any(not p.name.startswith(".") for p in dest.iterdir()):
         raise UsageError(
             f"{dest} already exists and is not empty. "
             "Remove it or choose a different directory."

@@ -137,6 +137,26 @@ Tests that call `train()` or build a venv are marked `pytest.mark.slow` at the m
 **Lazy imports in iris template `model.py`.**
 The original template imported `pandas` and `sklearn` at module level. When `--validate-only` runs inside Docker, it imports `model.py` to check the contract — triggering sklearn/numpy import before `fit` is called. On some CPU configurations this caused SIGILL (exit 132) on the first container run, while later tests passed (numpy already warm). Moving imports inside `fit()` aligns with the lazy-import rule already applied to `SklearnModel`, eliminates the cold-start crash, and reduces container startup time for deep checks.
 
+## Implementation decisions (step 5)
+
+**FastAPI app as a factory with injected model — `create_app(manifest, schema, model)`.**
+The serving module exposes a factory that receives the already-loaded model, rather than loading it internally. This allows tests to inject a mock model (pure Python, no sklearn) and use `TestClient` without starting a subprocess, venv, or Docker container. In production, `server.py` loads the model from the run directory and passes it to the factory. The alternative — loading inside `create_app` — would have required a real run directory for every test, coupling the unit tests to the filesystem.
+
+**Server runs inside the isolated environment (venv or Docker), not the host.**
+`mlt serve` launches `python -m mlt.serving.server <run_dir>` inside the same environment used for training (venv at `~/.mlt/envs/<env_hash>/` or Docker image `mlt-env:<hash>`). This is required because loading the model needs the scientist's dependencies (joblib, sklearn, etc.), which only exist in the isolated environment. The host Python does not have them. The serve command reads `manifest.environment.env_hash` to find the right environment.
+
+**`_mlt_pkg.py` — shared utility for editable vs. non-editable mlt installs.**
+Both VenvRunner and DockerRunner need to install mlt inside the isolated environment. With an editable install (`pip install -e .`), `mlt.__file__` points to the source tree and `pip install -e <root>` works. With a non-editable install (`pip install mlt`), the fallback in `_find_mlt_root()` returned `site-packages/`, which caused `shutil.copytree` to try to copy the entire site-packages directory. The fix: `find_mlt_source_root()` returns `None` when no source tree is found, and `write_mlt_installable()` reconstructs a minimal pip-installable layout from the installed package plus runtime deps read from `importlib.metadata`. This avoids hardcoding the dep list in a second place.
+
+**`SklearnModel.predict` reorders columns by `feature_names_in_`.**
+sklearn >= 1.0 raises `ValueError` if a DataFrame passed to `predict` has column names in a different order than training. Since `pd.DataFrame(list_of_dicts)` preserves insertion order (which may differ from the training order), predictions would fail for any client that sends features in an order other than the exact training order. The fix uses `model.feature_names_in_` (set automatically by sklearn when trained with a named DataFrame) to reorder the columns before calling `predict`. If `feature_names_in_` is absent (array input at training time), the input order is used unchanged.
+
+**`openapi_extra` for the `/predict` body in Swagger.**
+The `/predict` endpoint uses `Request` as its parameter type to retain manual control over error codes (400/413/422/500 per the design). FastAPI cannot infer the request body schema from `Request`, so the Swagger UI did not show the body editor. The fix adds `openapi_extra` with a JSON Schema description and an example record generated from the run's schema. This gives Swagger full documentation without changing the error handling logic.
+
+**`init` accepts any dot-prefixed entry, not a named whitelist.**
+The original check used `_SAFE = {".venv", ".git", ".DS_Store"}` and blocked any other hidden entry. Any real project directory (with `.python-version`, `.mypy_cache`, etc.) would fail even before running `mlt init`. The rule was simplified to `name.startswith(".")`: hidden entries coexist, visible entries signal an occupied project directory.
+
 ## Ambiguities and interpretations
 
 When the problem statement left something open, I chose the simplest interpretation that keeps the tool useful end-to-end.

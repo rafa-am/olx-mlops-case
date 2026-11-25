@@ -135,6 +135,39 @@ In the implementation, verification is done with the critical flow tests and by 
 - Verified that all slow tests share a single venv hash (iris requirements = minimal requirements).
 - Confirmed Docker tests share a single image after unifying requirements in `test_docker_runner_deep_check_fails_bad_model`.
 
+### Step 4 — Docker runner and check --deep (2026-11-25)
+
+**What the AI generated:** `DockerRunner` (inline Dockerfile, mlt source in build context, `--network none`), `docker_check.py`, `check --deep` with `--runner [auto|venv|docker]`, `--validate-only` worker flag, `test_runner_docker.py` (9 tests).
+
+**No adjustment record available:** this step was implemented in a prior session without a correction log. Verified by: `pytest -m docker` passing 8/9 tests; the remaining test (`test_docker_runner_deep_check_passes`) had a SIGILL on cold start, fixed in the test suite overhaul by moving sklearn/pandas imports inside `fit()`.
+
+---
+
+### Step 5 — Serving: FastAPI server and mlt serve (2026-11-25)
+
+**What the AI generated:** `src/mlt/serving/{__init__,app,server}.py`, `src/mlt/cli/serve_cmd.py`, `src/mlt/runners/_mlt_pkg.py`, updates to `main.py`, `pyproject.toml` (fastapi, uvicorn, httpx2), and `tests/test_serving.py` (21 tests).
+
+**Corrections and bugs found during author testing:**
+
+| What happened | Fix applied | Reason |
+| --- | --- | --- |
+| `mlt init .` blocked by `.mypy_cache`, `.python-version` etc. | Replaced named whitelist `{".venv", ".git"}` with rule `name.startswith(".")` | The whitelist only covered two specific names; any other dot-entry blocked init |
+| `mlt train` printed `runner  auto` without resolving | Added `auto → docker` / `auto → venv` display using `docker_available()` | "auto" gives no information about what actually ran |
+| `mlt train . --template iris` appeared to bring only `model.py` and `.gitignore` | Confirmed all 6 template files are copied; added `[tool.setuptools.package-data]` to `pyproject.toml` | Non-editable wheel installs would have omitted non-`.py` template files |
+| `POST /predict` returned 500 for valid iris features in different column order | Added `feature_names_in_` reordering in `SklearnModel.predict` | sklearn >= 1.0 requires feature columns in the same order as training; arbitrary dict key order breaks prediction |
+| `mlt train` / `mlt serve` with non-editable mlt install tried to copy all of `site-packages/` to Docker build context | Extracted `_mlt_pkg.py` with `find_mlt_source_root()` and `write_mlt_installable()`; used in both `DockerRunner` and `VenvRunner` | The fallback path in `_find_mlt_root()` returned `.parent.parent` of the package = `site-packages/`; rebuilding after reinstalling mlt required `--force` to pick up the new venv |
+| Swagger `/docs` did not show request body editor for `/predict` | Added `openapi_extra` with request body schema and example | Endpoint uses raw `Request`; FastAPI cannot infer body schema automatically |
+
+**How the author verified:**
+- Ran `pytest -m "not slow and not docker"`: 126/126 passed.
+- Executed the full end-to-end flow manually: `mlt init . --template iris`, `mlt train . --runner venv`, `mlt serve latest`, `curl POST /predict`, `/health`, `/schema`, `/metadata`, Swagger UI at `/docs`.
+- Confirmed that `mlt serve` prints `auto → docker` or `auto → venv` in the preamble.
+- Confirmed that `POST /predict` with features in any column order returns a valid prediction.
+
+**Time spent:** ~1h (generation + 6 rounds of testing and correction).
+
+---
+
 ## Reflections
 
 Author's draft, to be revised at the end of the implementation.

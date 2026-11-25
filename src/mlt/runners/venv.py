@@ -26,17 +26,6 @@ from mlt.runners.base import Runner
 _ENVS_DIR = Path.home() / ".mlt" / "envs"
 
 
-def _find_mlt_root() -> Path:
-    """Walk up from mlt/__init__.py to find the directory with pyproject.toml."""
-    import mlt
-
-    candidate = Path(mlt.__file__).parent  # src/mlt/
-    for _ in range(5):
-        candidate = candidate.parent
-        if (candidate / "pyproject.toml").exists():
-            return candidate
-    # Fallback: return the src/mlt parent (src/)
-    return Path(mlt.__file__).parent.parent
 
 
 class VenvRunner(Runner):
@@ -169,14 +158,33 @@ class VenvRunner(Runner):
         )
 
         pip = str(venv_dir / "bin" / "pip")
-        mlt_root = _find_mlt_root()
 
         # Install mlt first so its dependencies are available inside the venv.
-        result = subprocess.run(
-            [pip, "install", "-q", "-e", str(mlt_root)],
-            capture_output=True,
-            text=True,
-        )
+        # Editable install → pip install -e <source_root> (dev changes picked up).
+        # Non-editable     → reconstruct a minimal layout in a temp dir and pip install.
+        from mlt.runners._mlt_pkg import find_mlt_source_root, write_mlt_installable
+
+        source_root = find_mlt_source_root()
+        if source_root is not None:
+            mlt_install_args = ["-e", str(source_root)]
+            tmp_mlt_dir = None
+        else:
+            import tempfile
+            tmp_mlt_dir = Path(tempfile.mkdtemp(prefix="mlt_venv_install_"))
+            write_mlt_installable(tmp_mlt_dir)
+            mlt_install_args = [str(tmp_mlt_dir)]
+
+        try:
+            result = subprocess.run(
+                [pip, "install", "-q"] + mlt_install_args,
+                capture_output=True,
+                text=True,
+            )
+        finally:
+            if tmp_mlt_dir is not None:
+                import shutil as _shutil
+                _shutil.rmtree(tmp_mlt_dir, ignore_errors=True)
+
         if result.returncode != 0:
             import shutil
             shutil.rmtree(venv_dir, ignore_errors=True)

@@ -26,16 +26,25 @@ _IMAGE_PREFIX = "mlt-env"
 _TIMEOUT_EXIT_CODE = 124
 
 
-def _find_mlt_root() -> Path:
-    """Walk up from mlt/__init__.py to find the directory with pyproject.toml."""
-    import mlt
+def _copy_mlt_to_context(ctx_path: Path) -> None:
+    """Copy mlt into *ctx_path/mlt_src/* in a pip-installable layout.
 
-    candidate = Path(mlt.__file__).parent
-    for _ in range(5):
-        candidate = candidate.parent
-        if (candidate / "pyproject.toml").exists():
-            return candidate
-    return Path(mlt.__file__).parent.parent
+    Editable install  → copy the whole source tree (pyproject.toml + src/).
+    Non-editable      → reconstruct a minimal layout via write_mlt_installable.
+    """
+    from mlt.runners._mlt_pkg import find_mlt_source_root, write_mlt_installable
+
+    source_root = find_mlt_source_root()
+    if source_root is not None:
+        shutil.copytree(
+            source_root,
+            ctx_path / "mlt_src",
+            ignore=shutil.ignore_patterns(
+                "__pycache__", "*.pyc", ".git", ".venv", "*.egg-info",
+            ),
+        )
+    else:
+        write_mlt_installable(ctx_path / "mlt_src")
 
 
 def _make_dockerfile(python_version: str) -> str:
@@ -172,18 +181,11 @@ class DockerRunner(Runner):
     def _build_image(self, tag: str) -> None:
         from mlt.core.errors import MltEnvironmentError
 
-        mlt_root = _find_mlt_root()
         with tempfile.TemporaryDirectory() as ctx:
             ctx_path = Path(ctx)
 
-            # Copy mlt source into the build context.
-            shutil.copytree(
-                mlt_root,
-                ctx_path / "mlt_src",
-                ignore=shutil.ignore_patterns(
-                    "__pycache__", "*.pyc", ".git", ".venv", "*.egg-info",
-                ),
-            )
+            # Copy mlt into the build context (handles editable and non-editable).
+            _copy_mlt_to_context(ctx_path)
 
             # requirements.txt as a separate layer for better caching.
             shutil.copy2(self._requirements_txt, ctx_path / "requirements.txt")

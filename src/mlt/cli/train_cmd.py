@@ -53,8 +53,16 @@ def train_cmd(
     python_minor, python_requested, python_source = resolve_python(project_dir, python_ver)
     seed_val, seed_origin = resolve_seed(seed, os.environ)
 
+    from mlt.core.docker_check import docker_available
+
+    if runner == "auto":
+        effective_runner = "docker" if docker_available() else "venv"
+        runner_display = f"auto → {effective_runner}"
+    else:
+        runner_display = runner
+
     click.echo(f"  python  {python_requested}  ({python_source})")
-    click.echo(f"  runner  {runner}")
+    click.echo(f"  runner  {runner_display}")
     click.echo(f"  seed    {seed_val}  ({seed_origin})")
     click.echo()
 
