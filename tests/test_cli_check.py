@@ -56,7 +56,7 @@ def test_check_fails_missing_requirements(tmp_path):
     # No requirements.txt
     r = invoke("check", str(tmp_path))
     assert r.exit_code != 0
-    assert "erro" in r.output.lower() or "error" in r.output.lower()
+    assert "error" in r.output.lower()
 
 
 def test_check_fails_missing_model_py(tmp_path):
@@ -87,4 +87,4 @@ def test_check_fails_missing_data_dir(minimal_project):
     p = minimal_project
     r = invoke("check", str(p["project_dir"]), "--data", str(p["project_dir"] / "nodata"))
     assert r.exit_code != 0
-    assert "erro" in r.output.lower() or "error" in r.output.lower()
+    assert "error" in r.output.lower()
