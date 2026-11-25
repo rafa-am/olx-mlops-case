@@ -26,6 +26,7 @@ def test_init_creates_gitignore(tmp_path):
     invoke("init", str(dest))
     gitignore = (dest / ".gitignore").read_text()
     assert ".mlt/" in gitignore
+    assert ".venv/" in gitignore
     assert "data/" in gitignore
     assert "__pycache__/" in gitignore
 

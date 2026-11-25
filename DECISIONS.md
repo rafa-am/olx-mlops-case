@@ -139,6 +139,8 @@ Quando o enunciado deixou algo aberto, escolhi a interpretação mais simples qu
 
 **"Somente código Python":** interpretei como "sem infraestrutura nem servidor", e não como "sem nenhuma convenção". O enunciado pede que eu defina o contrato mínimo e o justifique, então alguma estrutura é esperada. O obrigatório é `requirements.txt` e `model.py`; `params.yaml` e `schema.yaml` são opcionais. Eles não são Python porque configuração lida sem executar código é mais fácil de revisar, versionar e comparar entre runs.
 
+**Instalação do `mlt` no host:** o `mlt` pode ser instalado num venv dentro do projeto (`python3 -m venv .venv && pip install mlt`) ou num venv global compartilhado entre projetos. O `.gitignore` gerado pelo `mlt init` inclui `.venv/` para o caso mais comum (venv local), e o README menciona a alternativa global. O que importa é que `mlt` esteja no PATH — a localização do venv é indiferente para a ferramenta.
+
 **Atrito de adoção:** herdar de `MLModel` acopla o `model.py` à ferramenta, e um script existente precisa ser adaptado. Mitigações: o `mlt init` entrega o esqueleto, a classe fica em um subpacote sem dependências e continua testável fora da ferramenta.
 
 **Guia do cientista:** o contrato precisa estar visível para quem usa a ferramenta, e não só para quem a projeta. O README traz um guia de uma página (classe base a escolher, o que `fit` e `predict` recebem, `requirements.txt` completo, dados e schema), e o `init` oferece os templates `iris` (scikit-learn) e `blank` (esqueleto de `MLModel`). Os dados ficam em `<projeto>/data/` por padrão, ou em outra pasta indicada por `--data`. Erros dentro do `predict` só aparecem ao servir, porque o `check` não treina; isso está dito no guia.

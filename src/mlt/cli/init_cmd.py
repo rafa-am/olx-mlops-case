@@ -12,6 +12,7 @@ from mlt.core.errors import UsageError
 
 _GITIGNORE = """\
 .mlt/
+.venv/
 data/
 __pycache__/
 *.pyc
