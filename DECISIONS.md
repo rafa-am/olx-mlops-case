@@ -117,6 +117,9 @@ O `verify` treina a partir de `code/` (snapshot do run original), mas armazenar 
 **`verify` recusa se o hash dos dados mudou — saída 8.**
 Sem `--snapshot-data`, a reprodutibilidade dos dados é de identidade. Se o hash atual diverge do manifesto original, o `verify` recusa com `OperationRefusedError` (exit 8) e orienta o usuário a usar `mlt diff` ou `--snapshot-data`. Alternativa seria treinar assim mesmo e avisar — mas isso produziria um run com dados diferentes, o que contradiz o objetivo do verify.
 
+**`iris.csv` embutido no template iris.**
+O template iris não tinha dado de exemplo, o que quebrava a promessa do `mlt init` ("próximos passos: cd, check, train") — o cientista precisava gerar o CSV manualmente antes de poder treinar. A decisão foi incluir `data/iris.csv` (150 linhas, ~6 KB, domínio público) diretamente em `src/mlt/templates/iris/data/`. O `mlt init` já copia tudo via `template_dir.rglob("*")`, sem nenhuma mudança de código. Alternativa avaliada: um script `generate_data.py` no template, mais explícito mas com mais atrito. O CSV embutido foi preferido pela simplicidade.
+
 **`--rebuild` adiado.**
 O `--rebuild` força a reconstrução do ambiente cacheado no venv. A implementação exigiria mudanças no `VenvRunner` (deletar o diretório do env e recriar) além da flag na CLI. Como é um caso de borda operacional (ambiente corrompido) que não afeta a correção, foi adiado. O `--force` cobre o caso mais comum (retreinar ignorando a idempotência).
 

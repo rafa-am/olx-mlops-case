@@ -46,16 +46,14 @@ def iris_template_dir() -> Path:
 
 @pytest.fixture()
 def iris_project(tmp_path, iris_template_dir) -> dict:
-    """Copy the iris template to a fresh tmp dir and generate iris.csv.
+    """Copy the iris template to a fresh tmp dir.
 
+    The template already ships data/iris.csv, so no generation is needed.
     Returns a dict with keys: project_dir, data_dir.
     """
     project_dir = tmp_path / "iris_project"
     shutil.copytree(iris_template_dir, project_dir)
-
     data_dir = project_dir / "data"
-    make_iris_csv(data_dir)
-
     return {"project_dir": project_dir, "data_dir": data_dir}
 
 

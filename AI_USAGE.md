@@ -109,6 +109,14 @@ Na implementação, a verificação é feita com os testes dos fluxos críticos 
 
 **Tempo gasto:** ~25 min de geração + 11:42 de execução dos testes (136 no total; os de integração reutilizaram o cache do venv).
 
+### Melhoria pós-etapa 3 — iris.csv no template (2026-11-24)
+
+**O que a IA gerou:** o CSV (via `sklearn.datasets.load_iris`) e as alterações em `conftest.py` e `test_cli_init.py`.
+
+**Nenhum ajuste foi necessário.** O `init_cmd.py` já copiava tudo via `rglob("*")`, então o dado foi incluído sem mudança de código.
+
+**Como o autor verificou:** `mlt init /tmp/demo --template iris && mlt train /tmp/demo` completo sem etapa manual de geração de dados.
+
 ## Reflexões
 
 Rascunho do autor, a revisar ao fim da implementação.

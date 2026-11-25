@@ -69,3 +69,13 @@ def test_init_default_template_is_iris(tmp_path):
     # Iris template imports SklearnModel
     model_src = (dest / "model.py").read_text()
     assert "SklearnModel" in model_src
+
+
+def test_init_copies_iris_csv(tmp_path):
+    """iris template ships iris.csv so mlt train works immediately after init."""
+    dest = tmp_path / "proj"
+    invoke("init", str(dest))
+    assert (dest / "data" / "iris.csv").exists()
+    # 150 rows + header
+    lines = (dest / "data" / "iris.csv").read_text().splitlines()
+    assert len(lines) == 151
