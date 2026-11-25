@@ -59,9 +59,9 @@ def init_cmd(directory: str, template: str) -> None:
     # Always generate a fresh .gitignore (may overwrite a template one).
     (dest / ".gitignore").write_text(_GITIGNORE, encoding="utf-8")
 
-    click.echo(f"Projeto criado em {dest}")
+    click.echo(f"Project created at {dest}")
     click.echo()
-    click.echo("Próximos passos:")
+    click.echo("Next steps:")
     click.echo(f"  cd {directory}")
     click.echo("  mlt check")
     click.echo("  mlt train")

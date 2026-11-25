@@ -62,7 +62,7 @@ def check_cmd(directory: str, data_dir: str | None, deep: bool) -> None:
 
     python_minor, python_requested, python_source = resolve_python(project_dir, None)
     click.echo(f"  python  {python_requested}  ({python_source})")
-    click.echo(f"  dados   {effective_data}")
+    click.echo(f"  data    {effective_data}")
     click.echo()
 
     # Static contract checks.
@@ -98,7 +98,7 @@ def check_cmd(directory: str, data_dir: str | None, deep: bool) -> None:
 
     click.echo()
     if has_error:
-        click.echo(click.style("erro", fg="red"))
+        click.echo(click.style("error", fg="red"))
         raise ContractError("one or more contract checks failed")
     else:
         click.echo(click.style("ok", fg="green"))

@@ -36,7 +36,7 @@ def test_verify_reproduces_run(minimal_project):
         "verify", run_id, "--data", str(p["data_dir"]),
     )
     assert r.exit_code == 0, r.output
-    assert "reproduzível" in r.output
+    assert "reproducible" in r.output
 
 
 def test_verify_creates_verification_run(minimal_project):

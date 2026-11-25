@@ -18,7 +18,7 @@ def invoke(*args):
 
 
 def test_runs_list_no_runs(tmp_path):
-    """No runs → 'nenhum run ainda', exit 0."""
+    """No runs → 'no runs yet', exit 0."""
     import os
     old = os.getcwd()
     os.chdir(tmp_path)
@@ -27,7 +27,7 @@ def test_runs_list_no_runs(tmp_path):
     finally:
         os.chdir(old)
     assert r.exit_code == 0
-    assert "nenhum run ainda" in r.output
+    assert "no runs yet" in r.output
 
 
 def test_runs_list_shows_run(minimal_project):
@@ -76,9 +76,9 @@ def test_runs_show_all_sections(minimal_project):
 
     assert r.exit_code == 0, r.output
     assert run_id in r.output
-    assert "ENTRADAS" in r.output
-    assert "AMBIENTE" in r.output
-    assert "RESULTADOS" in r.output
+    assert "INPUTS" in r.output
+    assert "ENVIRONMENT" in r.output
+    assert "OUTPUTS" in r.output
     assert "accuracy" in r.output
 
 

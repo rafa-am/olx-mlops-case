@@ -65,11 +65,11 @@ def train_cmd(
         if not _build_noted[0]:
             _build_noted[0] = True
             click.echo(
-                "  construindo ambiente (pode demorar na primeira vez)...",
+                "  building environment (may be slow the first time)...",
                 err=False,
             )
 
-    click.echo("  treinando...")
+    click.echo("  training...")
 
     from mlt.core.trainer import train
 

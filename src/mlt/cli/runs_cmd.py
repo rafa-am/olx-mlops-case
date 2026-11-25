@@ -18,12 +18,12 @@ def _age(created_at_iso: str) -> str:
         delta = datetime.now(timezone.utc) - created
         s = int(delta.total_seconds())
         if s < 60:
-            return f"{s}s atrás"
+            return f"{s}s ago"
         if s < 3600:
-            return f"{s // 60}min atrás"
+            return f"{s // 60}min ago"
         if s < 86400:
-            return f"{s // 3600}h atrás"
-        return f"{s // 86400}d atrás"
+            return f"{s // 3600}h ago"
+        return f"{s // 86400}d ago"
     except Exception:
         return created_at_iso[:16]
 
@@ -60,7 +60,7 @@ def runs_list(show_all: bool) -> None:
     runs = store.list_runs(limit=20, show_all=show_all)
 
     if not runs:
-        click.echo("nenhum run ainda")
+        click.echo("no runs yet")
         return
 
     for m in runs:
@@ -99,18 +99,18 @@ def runs_show(run_id: str) -> None:
     )
     click.echo(f"run_id    {m.run_id}")
     click.echo(f"status    {status_str}")
-    click.echo(f"criado    {m.created_at}")
+    click.echo(f"created   {m.created_at}")
     if m.finished_at:
-        click.echo(f"concluído {m.finished_at}")
-    click.echo(f"duração   {_duration(m.duration_s)}")
+        click.echo(f"finished  {m.finished_at}")
+    click.echo(f"duration  {_duration(m.duration_s)}")
     if m.verification_of:
-        click.echo(f"verifica  {m.verification_of}")
+        click.echo(f"verifies  {m.verification_of}")
 
     # --- Inputs ---
     inp = d.get("inputs", {})
     if inp:
         click.echo()
-        click.echo(click.style("ENTRADAS", bold=True))
+        click.echo(click.style("INPUTS", bold=True))
         seed = inp.get("seed")
         seed_src = inp.get("seed_source", "")
         if seed is not None:
@@ -123,9 +123,9 @@ def runs_show(run_id: str) -> None:
         code_info = inp.get("code", {})
         if code_info:
             commit = code_info.get("git_commit") or "-"
-            dirty = " (sujo)" if code_info.get("dirty") else ""
+            dirty = " (dirty)" if code_info.get("dirty") else ""
             click.echo(
-                f"  código  {(code_info.get('hash') or '')[:8]}  commit: {commit[:8]}{dirty}"
+                f"  code    {(code_info.get('hash') or '')[:8]}  commit: {commit[:8]}{dirty}"
             )
         params_info = inp.get("params", {})
         pvals = params_info.get("values", {})
@@ -136,19 +136,19 @@ def runs_show(run_id: str) -> None:
         if data_info:
             files = data_info.get("files", {})
             click.echo(
-                f"  dados   {len(files)} arquivo(s)  hash {(data_info.get('hash') or '')[:8]}"
+                f"  data    {len(files)} file(s)  hash {(data_info.get('hash') or '')[:8]}"
             )
         deps_info = inp.get("deps", {})
         lock = deps_info.get("lock", [])
-        click.echo(f"  deps    {len(lock)} pacote(s)")
+        click.echo(f"  deps    {len(lock)} package(s)")
 
     # --- Environment ---
     env = d.get("environment", {})
     if env:
         click.echo()
-        click.echo(click.style("AMBIENTE", bold=True))
+        click.echo(click.style("ENVIRONMENT", bold=True))
         click.echo(f"  runner     {env.get('runner', '-')}")
-        click.echo(f"  isolamento {env.get('isolation', '-')}")
+        click.echo(f"  isolation  {env.get('isolation', '-')}")
         if env.get("python"):
             click.echo(f"  python     {env['python']}")
 
@@ -156,19 +156,19 @@ def runs_show(run_id: str) -> None:
     out = d.get("outputs")
     if out:
         click.echo()
-        click.echo(click.style("RESULTADOS", bold=True))
+        click.echo(click.style("OUTPUTS", bold=True))
         for k, v in (out.get("metrics") or {}).items():
             click.echo(f"  {k:<10}  {v:.4f}")
         artifacts = out.get("artifacts", {})
         if artifacts:
             first = next(iter(artifacts))
             run_dir = store.run_dir(m.run_id)
-            click.echo(f"  modelo     {run_dir / first}")
+            click.echo(f"  model      {run_dir / first}")
 
     # --- Error ---
     if m.error:
         click.echo()
-        click.echo(click.style("ERRO", bold=True, fg="red"))
+        click.echo(click.style("ERROR", bold=True, fg="red"))
         click.echo(f"  {m.error}")
         log_path = store.run_dir(m.run_id) / "train.log"
         if log_path.exists():

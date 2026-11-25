@@ -34,6 +34,7 @@ def test_init_creates_gitignore(tmp_path):
 def test_init_prints_next_steps(tmp_path):
     dest = tmp_path / "proj"
     r = invoke("init", str(dest))
+    assert "Next steps:" in r.output
     assert "mlt check" in r.output
     assert "mlt train" in r.output
 

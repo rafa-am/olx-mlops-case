@@ -23,8 +23,8 @@ def _fingerprint_components(m1: Manifest, m2: Manifest) -> list[str]:
     d2 = m2.to_dict()
     checks = [
         ("params",  ("inputs", "params", "hash")),
-        ("código",  ("inputs", "code",   "hash")),
-        ("dados",   ("inputs", "data",   "hash")),
+        ("code",    ("inputs", "code",   "hash")),
+        ("data",    ("inputs", "data",   "hash")),
         ("seed",    ("inputs", "seed")),
         ("python",  ("inputs", "python", "requested")),
         ("deps",    ("inputs", "deps",   "hash")),
@@ -60,12 +60,12 @@ def diff_cmd(run_a: str, run_b: str) -> None:
 
     # --- Fingerprint summary ---
     if m1.fingerprint == m2.fingerprint:
-        click.echo("fingerprint: " + click.style("idêntico", fg="green"))
+        click.echo("fingerprint: " + click.style("identical", fg="green"))
     else:
         components = _fingerprint_components(m1, m2)
-        comp_str = ", ".join(components) if components else "desconhecido"
+        comp_str = ", ".join(components) if components else "unknown"
         click.echo(
-            "fingerprint: " + click.style(f"diferente ({comp_str})", fg="yellow")
+            "fingerprint: " + click.style(f"different ({comp_str})", fg="yellow")
         )
 
     any_diff = False
@@ -90,7 +90,7 @@ def diff_cmd(run_a: str, run_b: str) -> None:
     c1 = _get(d1, "inputs", "code", "hash")
     c2 = _get(d2, "inputs", "code", "hash")
     if c1 != c2:
-        _section("código")
+        _section("code")
         click.echo(f"  hash    {_short(c1)} → {_short(c2)}")
         cm1 = _get(d1, "inputs", "code", "git_commit")
         cm2 = _get(d2, "inputs", "code", "git_commit")
@@ -101,12 +101,12 @@ def diff_cmd(run_a: str, run_b: str) -> None:
     dh1 = _get(d1, "inputs", "data", "hash")
     dh2 = _get(d2, "inputs", "data", "hash")
     if dh1 != dh2:
-        _section("dados")
-        click.echo(f"  hash  {_short(dh1)} → {_short(dh2)}")
+        _section("data")
+        click.echo(f"  hash   {_short(dh1)} → {_short(dh2)}")
         f1 = len(_get(d1, "inputs", "data", "files") or {})
         f2 = len(_get(d2, "inputs", "data", "files") or {})
         if f1 != f2:
-            click.echo(f"  arquivos  {f1} → {f2}")
+            click.echo(f"  files  {f1} → {f2}")
 
     # --- Seed ---
     s1 = _get(d1, "inputs", "seed")
@@ -135,7 +135,7 @@ def diff_cmd(run_a: str, run_b: str) -> None:
     env_keys = sorted(set(env1) | set(env2) - {"env_hash"})
     env_diffs = [(k, env1.get(k), env2.get(k)) for k in env_keys if env1.get(k) != env2.get(k)]
     if env_diffs:
-        _section("ambiente")
+        _section("environment")
         for k, v1, v2 in env_diffs:
             click.echo(f"  {k}  {v1} → {v2}")
 
@@ -149,7 +149,7 @@ def diff_cmd(run_a: str, run_b: str) -> None:
         if met1.get(k) != met2.get(k)
     ]
     if met_diffs:
-        _section("métricas")
+        _section("metrics")
         for k, v1, v2 in met_diffs:
             if v1 is not None and v2 is not None:
                 delta = v2 - v1
@@ -160,4 +160,4 @@ def diff_cmd(run_a: str, run_b: str) -> None:
 
     if not any_diff and m1.fingerprint == m2.fingerprint:
         click.echo()
-        click.echo("entradas idênticas; sem diferenças")
+        click.echo("identical inputs; no differences")

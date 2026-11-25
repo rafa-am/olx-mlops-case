@@ -66,8 +66,8 @@ def verify_cmd(run_id: str, runner: str | None, data_dir: str | None) -> None:
     orig_python = (orig.inputs.get("python") or {}).get("requested")
     orig_seed = orig.inputs.get("seed")
 
-    click.echo(f"  retreinando a partir de {run_id[:8]}...")
-    click.echo(f"  runner  {effective_runner}  python  {orig_python or 'padrão'}"
+    click.echo(f"  retraining from {run_id[:8]}...")
+    click.echo(f"  runner  {effective_runner}  python  {orig_python or 'default'}"
                f"  seed  {orig_seed}")
     click.echo()
 
@@ -95,14 +95,14 @@ def verify_cmd(run_id: str, runner: str | None, data_dir: str | None) -> None:
     for key, v_orig in (orig.metrics or {}).items():
         v_new = (new_m.metrics or {}).get(key)
         if v_new is None:
-            metric_diffs.append(f"{key}: ausente no novo run")
+            metric_diffs.append(f"{key}: missing in new run")
             continue
         tol = 1e-6 * max(abs(v_orig), 1.0)
         if abs(v_orig - v_new) > tol:
             metric_diffs.append(f"{key}: {v_orig:.6g} ≠ {v_new:.6g}")
 
     if fp_match and not metric_diffs:
-        click.echo(click.style("✓ reproduzível", fg="green"))
+        click.echo(click.style("✓ reproducible", fg="green"))
         click.echo(f"  run_id  {new_run_id}")
     else:
         lines = []
@@ -111,7 +111,7 @@ def verify_cmd(run_id: str, runner: str | None, data_dir: str | None) -> None:
                 f"fingerprint: {(orig.fingerprint or '')[:8]} ≠ {(new_m.fingerprint or '')[:8]}"
             )
         lines.extend(metric_diffs)
-        click.echo(click.style("✗ divergiu", fg="red"))
+        click.echo(click.style("✗ diverged", fg="red"))
         for line in lines:
             click.echo(f"  {line}")
         raise ExecutionError(

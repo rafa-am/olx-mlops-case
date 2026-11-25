@@ -1,193 +1,193 @@
-# DECISIONS.md: Case MLOps
+# DECISIONS.md: MLOps Case
 
-## Visão geral
+## Overview
 
-O `mlt` é um pacote Python com CLI que leva o cientista de dados do treino reprodutível à API REST, a partir de apenas código Python.
+`mlt` is a Python package with a CLI that takes the data scientist from reproducible training to a REST API, from Python code alone.
 
-O cientista fornece `requirements.txt`, `model.py` (uma classe que herda de `MLModel`), dados e, opcionalmente, `params.yaml` e `schema.yaml`. A ferramenta cuida de isolamento, registro e serving.
+The scientist provides `requirements.txt`, `model.py` (a class that inherits from `MLModel`), data and, optionally, `params.yaml` and `schema.yaml`. The tool handles isolation, tracking, and serving.
 
-1. `mlt init` cria um projeto a partir de um modelo (o Iris é o exemplo).
-2. `mlt check` valida o contrato sem treinar.
-3. `mlt train` executa o treino em Docker (principal) ou venv, sem rede, e grava um run com modelo, métricas e manifesto.
-4. `mlt runs list` e `mlt runs show` identificam cada run.
-5. `mlt serve` sobe uma API FastAPI para um run específico.
+1. `mlt init` creates a project from a template (Iris is the example).
+2. `mlt check` validates the contract without training.
+3. `mlt train` runs training in Docker (primary) or venv, without network, and records a run with the model, metrics, and manifest.
+4. `mlt runs list` and `mlt runs show` identify each run.
+5. `mlt serve` starts a FastAPI for a specific run.
 
-A CLI é uma camada fina sobre `mlt.core`. `DataSource`, `Runner` e `RunStore` são interfaces com implementação local no MVP e caminho de evolução para a nuvem.
+The CLI is a thin layer over `mlt.core`. `DataSource`, `Runner`, and `RunStore` are interfaces with local implementation in the MVP and a path of evolution toward the cloud.
 
-## Contrato do cientista
+## Scientist's contract
 
-O contrato mínimo é uma pasta com `requirements.txt` e `model.py`. `params.yaml`, `schema.yaml` e dados são opcionais ou externos.
+The minimum contract is a folder with `requirements.txt` and `model.py`. `params.yaml`, `schema.yaml`, and data are optional or external.
 
-- `model.py` define exatamente uma subclasse de `MLModel`, com `fit(data_dir, params)` (devolve um dict de métricas) e `predict(inputs)` (lista de registros na entrada, lista de predições na saída).
-- `save` e `load` também são abstratos no núcleo. A classe opcional `SklearnModel` traz `predict` padrão e `save` e `load` em joblib, e o cientista só escreve o `fit` e atribui `self.model`.
-- A seed chega em `self.seed`; o cientista a usa nos estimadores.
-- `params.yaml`, se existir, vira o argumento `params`. `schema.yaml`, se existir, declara as features de entrada; sem ele, o schema é inferido de `feature_names_in_`.
+- `model.py` defines exactly one subclass of `MLModel`, with `fit(data_dir, params)` (returns a dict of metrics) and `predict(inputs)` (list of records as input, list of predictions as output).
+- `save` and `load` are also abstract in the core. The optional `SklearnModel` class provides a default `predict` and `save`/`load` via joblib, and the scientist only writes `fit` and assigns `self.model`.
+- The seed arrives in `self.seed`; the scientist uses it in estimators.
+- `params.yaml`, if it exists, becomes the `params` argument. `schema.yaml`, if it exists, declares the input features; without it, the schema is inferred from `feature_names_in_`.
 
-**Versão do Python:** o `requirements.txt` não consegue declará-la, então há um arquivo opcional `.python-version` (uma linha, convenção de pyenv e uv). Precedência: `--python`, depois o arquivo, depois o padrão.
+**Python version:** `requirements.txt` cannot declare it, so there is an optional `.python-version` file (one line, pyenv and uv convention). Precedence: `--python`, then the file, then the default.
 
-**Por que classe e não função:** uma base comum dá reuso, um ponto único para verificar o contrato e `predict` garantido. A função seria mais simples para scripts curtos, mas espalharia as convenções.
+**Why a class and not a function:** a common base provides reuse, a single point for verifying the contract, and a guaranteed `predict`. A function would be simpler for short scripts, but would scatter the conventions.
 
-**Por que o núcleo é agnóstico de framework:** um `predict` padrão baseado em Pipeline do scikit-learn no núcleo acoplaria a ferramenta a um tipo de artefato e dificultaria outros, como modelos treinados com PySpark. O núcleo exige `fit`, `predict`, `save` e `load`, e a ergonomia do scikit-learn vem na `SklearnModel`, opcional. A alternativa descartada foi pôr o `predict` padrão e o joblib no `MLModel`.
+**Why the core is framework-agnostic:** a default `predict` based on scikit-learn Pipeline in the core would couple the tool to one artifact type and make others difficult, such as PySpark-trained models. The core requires `fit`, `predict`, `save`, and `load`, and scikit-learn ergonomics come in `SklearnModel`, optionally. The discarded alternative was putting the default `predict` and joblib in `MLModel`.
 
-**Limite conhecido:** o `fit(data_dir, params)` assume dados em pasta local. Um modelo Spark pediria um `DataSource` que entregue uma URI e um `Runner` de cluster. A ferramenta poderia passar ao `fit` só os parâmetros que ele declara (como as fixtures do pytest), mas isso não é implementado no MVP.
+**Known limit:** `fit(data_dir, params)` assumes data in a local folder. A Spark model would need a `DataSource` that provides a URI and a cluster `Runner`. The tool could pass to `fit` only the parameters it declares (like pytest fixtures), but this is not implemented in the MVP.
 
-**Por que schema em YAML e não em Pydantic na classe:** tira a definição do código, permite revisar e versionar o que foi inferido e mantém o contrato menor. Perde validações cruzadas entre campos, o que fica registrado como limitação.
+**Why schema in YAML and not in Pydantic in the class:** removes the definition from code, allows reviewing and versioning what was inferred, and keeps the contract smaller. Loses cross-field validations, which is recorded as a limitation.
 
-## Isolamento e reprodutibilidade
+## Isolation and reproducibility
 
-Cada treino roda em um ambiente isolado e identificado por hashes, e o run registra tudo o que o identifica.
+Each training run executes in an isolated environment identified by hashes, and the run records everything that identifies it.
 
-- **Docker (principal):** imagem `mlt-env:<hash>`, com hash do `requirements.txt`, da versão do Python e da versão do `mlt`. A base é `python:3.12-slim` (`--python` troca). O build tem rede; o treino roda sem rede, com dados somente leitura.
-- **venv (alternativa):** mesmo contrato, com cache em `~/.mlt/envs/<hash>`. Não isola rede nem sistema, e o manifesto registra o nível de isolamento.
-- **Fingerprint:** hash de código, dados, params, schema declarado, dependências e seed. É a identidade do run.
-- **Seed:** `--seed`, depois `MLT_SEED`, depois 42. O valor efetivo e a origem vão no manifesto.
-- **Dependências:** após o build, o `pip freeze` é gravado como lock no manifesto. Requisitos sem versão fixa geram aviso.
-- **Garantia:** mesmo fingerprint significa mesmos insumos identificados. O `verify` compara métricas com tolerância, porque a seed não elimina o não determinismo de threads e bibliotecas.
+- **Docker (primary):** image `mlt-env:<hash>`, with hash of `requirements.txt`, Python version, and `mlt` version. The base is `python:3.12-slim` (`--python` changes it). The build has network access; training runs without network, with read-only data.
+- **venv (alternative):** same contract, with cache in `~/.mlt/envs/<hash>`. Does not isolate network or system, and the manifest records the isolation level.
+- **Fingerprint:** hash of code, data, params, declared schema, dependencies, and seed. It is the identity of the run.
+- **Seed:** `--seed`, then `MLT_SEED`, then 42. The effective value and origin go in the manifest.
+- **Dependencies:** after the build, `pip freeze` is recorded as a lock in the manifest. Requirements without pinned versions generate a warning.
+- **Guarantee:** same fingerprint means same identified inputs. `verify` compares metrics with tolerance, because the seed does not eliminate non-determinism from threads and libraries.
 
-**Limite conhecido:** o runtime do `mlt` é instalado no mesmo ambiente das dependências do cientista, então versões fixadas podem conflitar com FastAPI ou Pydantic. O isolamento do runtime em dois ambientes ficou como evolução.
+**Known limit:** the `mlt` runtime is installed in the same environment as the scientist's dependencies, so pinned versions may conflict with FastAPI or Pydantic. Isolating the runtime in two environments was left as future work.
 
-**Como o `mlt` entra na imagem:** o runner copia o pacote instalado para o contexto de build. Como a versão não muda durante o desenvolvimento, o hash do ambiente inclui também um hash do código-fonte do `mlt`, e `--rebuild` força a reconstrução.
+**How `mlt` enters the image:** the runner copies the installed package to the build context. Since the version does not change during development, the environment hash also includes a hash of the `mlt` source code, and `--rebuild` forces reconstruction.
 
-**Rede e montagens:** o build precisa de rede uma vez (pacotes e imagem base); depois, com cache, o treino roda offline. No container, projeto e dados são somente leitura, a saída do run é gravável, os temporários vão em `tmpfs` e o usuário não é root.
+**Network and mounts:** the build needs network access once (packages and base image); after that, with cache, training runs offline. In the container, project and data are read-only, the run output is writable, temporaries go in `tmpfs`, and the user is not root.
 
-**Python e runner:** no Docker, a base da imagem vem da versão pedida. No venv, o Python é o interpretador que executa o `mlt` (`sys.executable`), sem procurar outras versões no sistema; versão diferente da pedida sai com código 6, explicando como resolver. A versão major.minor entra no fingerprint, e o runner fica fora dele (só informativo), então o mesmo projeto em Docker e em venv tem o mesmo fingerprint. Sem Docker, o `auto` cai para o venv com aviso, e o manifesto registra `isolation: none`.
+**Python and runner:** in Docker, the base image comes from the requested version. In venv, Python is the interpreter that runs `mlt` (`sys.executable`), without searching for other versions in the system; a different version than requested exits with code 6, explaining how to fix it. The major.minor version enters the fingerprint, and the runner stays outside it (informational only), so the same project in Docker and in venv has the same fingerprint. Without Docker, `auto` falls back to venv with a warning, and the manifest records `isolation: none`.
 
-**`verify` e `diff`:** o `diff` compara dois manifestos e diz por que os fingerprints diferem. O `verify` é a prova prática de reprodutibilidade: retreina só a partir do que o run guardou (`code/`, params, schema, seed e Python), cria um run com `verification_of` e compara as métricas com tolerância relativa fixa de 1e-6 (saída 0 se reproduziu, 4 se divergiu). Não prova conteúdo igual dos dados sem snapshot nem reprodução bit a bit entre máquinas. Se faltar tempo, o comando é cortável e o mesmo argumento fica no teste de integração que treina duas vezes.
+**`verify` and `diff`:** `diff` compares two manifests and explains why the fingerprints differ. `verify` is the practical proof of reproducibility: retrains only from what the run saved (`code/`, params, schema, seed, and Python), creates a run with `verification_of`, and compares metrics with a fixed relative tolerance of 1e-6 (exit 0 if reproduced, 4 if diverged). It does not prove equal data content without a snapshot, nor bit-for-bit reproduction across machines. If time is short, the command can be cut and the same argument lives in the integration test that trains twice.
 
-## Dados
+## Data
 
-Os dados ficam fora da imagem e entram no treino por uma interface `DataSource`, para que a origem possa mudar sem alterar o contrato.
+Data stays outside the image and enters training through a `DataSource` interface, so the origin can change without altering the contract.
 
-- **MVP:** pasta local montada como volume somente leitura (`/data:ro`), sem cópia. O `fit` recebe `data_dir`.
-- **Evolução:** S3 ou lakehouse (Iceberg, Parquet), materializados fora do sandbox, então o treino continua sem rede. Para volumes que não cabem em disco, leitura direta por VPC endpoint.
-- **Rastreabilidade em níveis:** identificar (hash por arquivo e agregado, sempre), verificar (`mlt verify` recusa retreinar se os dados mudaram) e congelar (`--snapshot-data`, cópia endereçada por conteúdo).
-- **Sem congelar**, a garantia é de identidade, não de conteúdo: dá para dizer se dois runs usaram os mesmos dados, não recuperá-los. Com lakehouse, o snapshot imutável resolve isso sem copiar.
+- **MVP:** local folder mounted as a read-only volume (`/data:ro`), without copying. `fit` receives `data_dir`.
+- **Evolution:** S3 or lakehouse (Iceberg, Parquet), materialized outside the sandbox, so training continues without network. For volumes that do not fit on disk, direct reading via VPC endpoint.
+- **Traceability in levels:** identify (hash per file and aggregate, always), verify (`mlt verify` refuses to retrain if data changed), and freeze (`--snapshot-data`, content-addressed copy).
+- **Without freezing**, the guarantee is of identity, not content: you can say whether two runs used the same data, but not recover it. With a lakehouse, the immutable snapshot resolves this without copying.
 
-Estatísticas por coluna no manifesto ajudariam a diagnosticar mudanças, mas só identificam; ficaram fora do MVP.
+Column statistics in the manifest would help diagnose changes, but only identify them; left out of the MVP.
 
-**Dados e `check`:** o `check` pergunta ao `DataSource` se a fonte é utilizável (no MVP, a pasta local existe e não está vazia; num lakehouse seria uma consulta de metadados). No treino, o `DataSource` materializa os dados em um diretório local somente leitura, fora do projeto e fora da imagem. Por isso o snapshot não precisa existir na pasta do cientista.
+**Data and `check`:** `check` asks the `DataSource` whether the source is usable (in the MVP, the local folder exists and is not empty; in a lakehouse it would be a metadata query). In training, the `DataSource` materializes the data into a local read-only directory, cached outside the project and outside the image. So the snapshot does not need to exist in the scientist's folder.
 
-## Run, manifesto e RunStore
+## Run, manifest, and RunStore
 
-Cada treino gera um run imutável em `<projeto>/.mlt/runs/<run_id>/`, com modelo, `metrics.json`, `manifest.json`, `params.yaml` e `schema.yaml` efetivos, `code/` (cópia do projeto sem `data/` e `.mlt/`) e `train.log`. O run é autocontido: o `verify` retreina a partir de `code/`.
+Each training run generates an immutable run in `<project>/.mlt/runs/<run_id>/`, with model, `metrics.json`, `manifest.json`, effective `params.yaml` and `schema.yaml`, `code/` (copy of the project without `data/` and `.mlt/`), and `train.log`. The run is self-contained: `verify` retrains from `code/`.
 
-- **Manifesto (JSON):** blocos `inputs` (entram no fingerprint), `fingerprint`, `environment`, `outputs` e metadados do run, com `manifest_version`.
-- **SQLite** é só índice de consulta (identidade, fingerprint, ambiente, métricas, caminhos). O manifesto é a fonte de verdade, e o índice é reconstruível.
-- **Raiz é insumo, run é registro:** o treino copia `params.yaml` e `schema.yaml` para o run. `serve`, `verify` e `diff` leem do run, e `check` lê da raiz.
-- **Âncora no projeto:** `.mlt/` fica dentro do projeto (reconhecido por `model.py`) e é ignorado no hash do código. Os demais comandos descobrem o projeto subindo diretórios, como o Git.
-- **Concorrência:** `run_id` com sufixo aleatório e criação exclusiva, escrita atômica do manifesto, SQLite em modo WAL e lock por ambiente no build. Runs `running` sem processo vivo viram `failed` (`interrupted`).
-- **Falhas:** erro de contrato não cria run. Erro de execução e timeout criam run `failed`, com `error` e log preservado.
-- **Preparo para registry:** o run é um pacote autocontido, e o serving o obtém sempre pelo `RunStore`.
+- **Manifest (JSON):** blocks `inputs` (enter the fingerprint), `fingerprint`, `environment`, `outputs`, and run metadata, with `manifest_version`.
+- **SQLite** is only a query index (identity, fingerprint, environment, metrics, paths). The manifest is the source of truth, and the index is rebuildable.
+- **Root is input, run is record:** training copies `params.yaml` and `schema.yaml` to the run. `serve`, `verify`, and `diff` read from the run; `check` reads from the root.
+- **Project anchor:** `.mlt/` lives inside the project (recognized by `model.py`) and is ignored in the code hash. Other commands discover the project by walking up directories, like Git.
+- **Concurrency:** `run_id` with random suffix and exclusive directory creation, atomic manifest write, SQLite in WAL mode, and environment lock during build. Runs stuck in `running` without a live process become `failed` (`interrupted`).
+- **Failures:** contract errors do not create a run. Execution errors and timeouts create a `failed` run, with `error` and preserved log.
+- **Registry readiness:** the run is a self-contained package, and serving always obtains it via `RunStore`.
 
-## API de inferência e serving
+## Inference API and serving
 
-A API serve um run específico e tem quatro endpoints, com contrato mínimo e erros explícitos.
+The API serves a specific run and has four endpoints, with a minimal contract and explicit errors.
 
-- **`POST /predict`:** entrada `{"inputs": [registros]}`, saída `{"predictions": [...], "run_id": "..."}`. Uma predição por registro, na mesma ordem, de forma livre e serializável em JSON. A validação é tudo ou nada: 422 (índice e campo), 400, 413, 500 ou 503.
-- **`GET /schema`, `/metadata` e `/health`:** schema efetivo do run, identificação do modelo servido e prontidão.
-- **Ciclo de vida:** `mlt serve <run_id>` em primeiro plano (ou `--detach`), `ps`, `stop` e `logs`. O alias `latest` vira o `run_id` concreto ao subir. Só serve run `succeeded`, e escuta em 127.0.0.1.
-- **Imagem:** o ambiente do treino mais o servidor genérico. O modelo é montado somente leitura.
+- **`POST /predict`:** input `{"inputs": [records]}`, output `{"predictions": [...], "run_id": "..."}`. One prediction per record, in the same order, free-form and JSON-serializable. Validation is all-or-nothing: 422 (index and field), 400, 413, 500, or 503.
+- **`GET /schema`, `/metadata`, and `/health`:** effective schema of the run, identification of the served model, and readiness.
+- **Lifecycle:** `mlt serve <run_id>` in the foreground (or `--detach`), `ps`, `stop`, and `logs`. The alias `latest` resolves to the concrete `run_id` on startup. Only serves `succeeded` runs, and listens on 127.0.0.1.
+- **Image:** training environment plus the generic server. The model is mounted read-only.
 
-**Códigos de saída da CLI:** 0 sucesso, 1 erro inesperado, 2 uso incorreto, 3 contrato, 4 falha de execução, 5 timeout, 6 ambiente indisponível, 7 não encontrado, 8 operação recusada pelo estado.
+**CLI exit codes:** 0 success, 1 unexpected error, 2 incorrect usage, 3 contract, 4 execution failure, 5 timeout, 6 environment unavailable, 7 not found, 8 operation refused by state.
 
-Complementos: 130 para interrupção por Ctrl+C (o run fica `failed`, `interrupted`); 4 também para `verify` que diverge; 6 também para porta ocupada e para versão de Python indisponível no venv.
+Supplements: 130 for Ctrl+C interruption (the run becomes `failed`, `interrupted`); 4 also for `verify` that diverges; 6 also for a busy port and for a Python version unavailable in venv.
 
-## Decisões de implementação (etapa 2)
+## Implementation decisions (step 2)
 
-**Run criado antes do worker rodar — exit 3 deleta, não marca failed.**
-O design diz "erro de contrato dentro do ambiente não cria run". Na prática o run é criado em `running` antes de lançar o subprocess (para garantir consistência em caso de Ctrl+C). Se o worker sair com código 3 (ContractError na validação profunda), o trainer chama `store.remove_run()` e deleta o diretório — resultado visível: nenhum run no `runs list`. Se o worker sair com código 4 (ExecutionError no fit), o run é marcado `failed` e mantido (log preservado). Isso preserva o invariante do design sem requerer dois subprocessos (validate-only + train).
+**Run created before the worker runs — exit 3 deletes it, does not mark it failed.**
+The design says "contract error inside the environment does not create a run". In practice the run is created in `running` before launching the subprocess (to guarantee consistency in case of Ctrl+C). If the worker exits with code 3 (ContractError in deep validation), the trainer calls `store.remove_run()` and deletes the directory — visible result: no run in `runs list`. If the worker exits with code 4 (ExecutionError in fit), the run is marked `failed` and kept (log preserved). This preserves the design invariant without requiring two subprocesses (validate-only + train).
 
-**Worker como subpacote `mlt._worker` (instalado no venv).**
-Alternativa seria copiar um script avulso para o contexto de build. Usar um subpacote instalado junto com o `mlt` é mais limpo: sem arquivo temporário, sem caminho absoluto passado ao subprocess, e qualquer mudança no worker fica coberta pelo `mlt_source_hash` que invalida o cache do venv.
+**Worker as subpackage `mlt._worker` (installed in the venv).**
+An alternative would be to copy a standalone script to the build context. Using an installed subpackage alongside `mlt` is cleaner: no temporary file, no absolute path passed to the subprocess, and any change in the worker is covered by the `mlt_source_hash` that invalidates the venv cache.
 
-**VenvRunner usa `sys.executable` — sem busca no PATH.**
-Se `.python-version` ou `--python` pedirem versão diferente do interpretador que roda o `mlt`, o trainer levanta `MltEnvironmentError` (exit 6) com instrução clara: usar Docker ou reinstalar o `mlt` num venv com aquela versão. Alternativa (procurar `python3.X` no PATH) tornaria o comportamento dependente do ambiente do host e difícil de testar.
+**VenvRunner uses `sys.executable` — no PATH search.**
+If `.python-version` or `--python` request a different version than the interpreter running `mlt`, the trainer raises `MltEnvironmentError` (exit 6) with a clear instruction: use Docker or reinstall `mlt` in a venv with that version. The alternative (looking for `python3.X` in PATH) would make behavior dependent on the host environment and hard to test.
 
-## Decisões de implementação (etapa 3)
+## Implementation decisions (step 3)
 
-**Tratamento de erros na CLI — `_MltGroup.invoke` em vez de `main()`.**
-A abordagem inicial capturava `MltError` somente em `main()`. Em testes via `CliRunner` que invocam `cli` diretamente, o erro não era capturado pelo Click e o `result.exit_code` vinha como 1 (exceção genérica) em vez do código correto. A solução foi criar uma subclasse `_MltGroup(click.Group)` que sobrescreve `invoke` e captura `MltError`, traduzindo para `ctx.exit(code)`. Com isso, o código de saída correto é retornado tanto na execução real (via `main()` em standalone_mode=True) quanto nos testes via CliRunner.
+**Error handling in the CLI — `_MltGroup.invoke` instead of `main()`.**
+The initial approach captured `MltError` only in `main()`. In tests via `CliRunner` that invoke `cli` directly, the error was not caught by Click and `result.exit_code` came as 1 (generic exception) instead of the correct code. The solution was to create a subclass `_MltGroup(click.Group)` that overrides `invoke` and catches `MltError`, translating to `ctx.exit(code)`. This way, the correct exit code is returned both in real execution (via `main()` in standalone_mode=True) and in tests via CliRunner.
 
-**Descoberta de projeto em dois modos.**
-`train` e `check` recebem o caminho explicitamente e exigem `model.py` (erro 2 se ausente). `runs`, `diff` e `verify` sobem diretórios a partir do cwd até encontrar `model.py` ou `.mlt/`, com fallback para o cwd. Essa distinção reflete o design: os comandos de gestão de runs funcionam de dentro do projeto (como o `git`), enquanto `train` e `check` precisam de um alvo explícito para evitar treinar o projeto errado por acidente.
+**Project discovery in two modes.**
+`train` and `check` receive the path explicitly and require `model.py` (error 2 if absent). `runs`, `diff`, and `verify` walk up directories from the cwd until finding `model.py` or `.mlt/`, with fallback to cwd. This distinction reflects the design: run management commands work from inside the project (like `git`), while `train` and `check` need an explicit target to avoid accidentally training the wrong project.
 
-**`verify` guarda o run de verificação no store do projeto original, não em `code/`.**
-O `verify` treina a partir de `code/` (snapshot do run original), mas armazenar o run em `code/.mlt/` tornaria a verificação invisível no `mlt runs list` do projeto. A solução foi adicionar o parâmetro `_store_project_dir` ao `trainer.train()`: o RunStore é inicializado com o projeto original, e o run de verificação aparece na listagem com o marcador `[V]` e com `verification_of` preenchido no manifesto. O parâmetro é prefixado com `_` para sinalizar uso interno.
+**`verify` stores the verification run in the original project's store, not in `code/`.**
+`verify` trains from `code/` (snapshot of the original run), but storing the run in `code/.mlt/` would make the verification invisible in the project's `mlt runs list`. The solution was to add the `_store_project_dir` parameter to `trainer.train()`: the RunStore is initialized with the original project, and the verification run appears in the listing with the `[V]` marker and with `verification_of` filled in the manifest. The parameter is prefixed with `_` to signal internal use.
 
-**`verify` recusa se o hash dos dados mudou — saída 8.**
-Sem `--snapshot-data`, a reprodutibilidade dos dados é de identidade. Se o hash atual diverge do manifesto original, o `verify` recusa com `OperationRefusedError` (exit 8) e orienta o usuário a usar `mlt diff` ou `--snapshot-data`. Alternativa seria treinar assim mesmo e avisar — mas isso produziria um run com dados diferentes, o que contradiz o objetivo do verify.
+**`verify` refuses if the data hash changed — exit 8.**
+Without `--snapshot-data`, data reproducibility is by identity. If the current hash diverges from the original manifest, `verify` refuses with `OperationRefusedError` (exit 8) and directs the user to use `mlt diff` or `--snapshot-data`. An alternative would be to train anyway and warn — but that would produce a run with different data, which contradicts the goal of verify.
 
-**`iris.csv` embutido no template iris.**
-O template iris não tinha dado de exemplo, o que quebrava a promessa do `mlt init` ("próximos passos: cd, check, train") — o cientista precisava gerar o CSV manualmente antes de poder treinar. A decisão foi incluir `data/iris.csv` (150 linhas, ~6 KB, domínio público) diretamente em `src/mlt/templates/iris/data/`. O `mlt init` já copia tudo via `template_dir.rglob("*")`, sem nenhuma mudança de código. Alternativa avaliada: um script `generate_data.py` no template, mais explícito mas com mais atrito. O CSV embutido foi preferido pela simplicidade.
+**`iris.csv` embedded in the iris template.**
+The iris template had no example data, which broke the promise of `mlt init` ("next steps: cd, check, train") — the scientist had to generate the CSV manually before being able to train. The decision was to include `data/iris.csv` (150 rows, ~6 KB, public domain) directly in `src/mlt/templates/iris/data/`. `mlt init` already copies everything via `template_dir.rglob("*")`, with no code changes. Alternative considered: a `generate_data.py` script in the template, more explicit but with more friction. The embedded CSV was preferred for simplicity.
 
-**`--rebuild` adiado.**
-O `--rebuild` força a reconstrução do ambiente cacheado no venv. A implementação exigiria mudanças no `VenvRunner` (deletar o diretório do env e recriar) além da flag na CLI. Como é um caso de borda operacional (ambiente corrompido) que não afeta a correção, foi adiado. O `--force` cobre o caso mais comum (retreinar ignorando a idempotência).
+**`--rebuild` deferred.**
+`--rebuild` forces reconstruction of the cached venv environment. The implementation would require changes to `VenvRunner` (deleting the env directory and recreating it) plus the flag in the CLI. Since it is an operational edge case (corrupted environment) that does not affect correctness, it was deferred. `--force` covers the most common case (retraining ignoring idempotency).
 
-## Ambiguidades e interpretações
+## Ambiguities and interpretations
 
-Quando o enunciado deixou algo aberto, escolhi a interpretação mais simples que mantém a ferramenta útil de ponta a ponta.
+When the problem statement left something open, I chose the simplest interpretation that keeps the tool useful end-to-end.
 
-| Ponto | Interpretação escolhida | Motivo |
+| Point | Chosen interpretation | Reason |
 | --- | --- | --- |
-| Formato da ferramenta | Pacote Python com CLI, usando Docker como isolamento | O usuário fornece só Python; o resto é da ferramenta |
-| Contrato mínimo | Classe `MLModel` com `fit`, `predict`, `save` e `load`; `SklearnModel` opcional | Convenção única e verificável |
-| Isolamento | Docker como principal, venv como alternativa | Não depende de Docker na máquina de quem avalia |
-| API de inferência | Um serviço por run, sem autenticação | Abstrai o backend; o resto é evolução |
-| Artefatos e métricas associados à execução | Pasta do run com manifesto, e índice SQLite | Rastreável sem serviço externo |
-| Dataset público e modelo simples | Iris com RandomForest | O foco é a ferramenta |
-| Arquitetura em produção | Desenho AWS, não implementado | É opcional no enunciado |
+| Tool format | Python package with CLI, using Docker for isolation | The user provides only Python; the rest is the tool's responsibility |
+| Minimum contract | `MLModel` class with `fit`, `predict`, `save`, and `load`; `SklearnModel` optional | Single and verifiable convention |
+| Isolation | Docker as primary, venv as alternative | Does not depend on Docker on the evaluator's machine |
+| Inference API | One service per run, without authentication | Abstracts the backend; the rest is evolution |
+| Artifacts and metrics associated with the execution | Run folder with manifest, and SQLite index | Traceable without an external service |
+| Public dataset and simple model | Iris with RandomForest | The focus is the tool |
+| Production architecture | AWS design, not implemented | It is optional in the problem statement |
 
-**"Somente código Python":** interpretei como "sem infraestrutura nem servidor", e não como "sem nenhuma convenção". O enunciado pede que eu defina o contrato mínimo e o justifique, então alguma estrutura é esperada. O obrigatório é `requirements.txt` e `model.py`; `params.yaml` e `schema.yaml` são opcionais. Eles não são Python porque configuração lida sem executar código é mais fácil de revisar, versionar e comparar entre runs.
+**"Only Python code":** I interpreted this as "no infrastructure or server", not as "no convention at all". The problem statement asks me to define the minimum contract and justify it, so some structure is expected. The required items are `requirements.txt` and `model.py`; `params.yaml` and `schema.yaml` are optional. They are not Python because configuration read without executing code is easier to review, version, and compare across runs.
 
-**Instalação do `mlt` no host:** o `mlt` pode ser instalado num venv dentro do projeto (`python3 -m venv .venv && pip install mlt`) ou num venv global compartilhado entre projetos. O `.gitignore` gerado pelo `mlt init` inclui `.venv/` para o caso mais comum (venv local), e o README menciona a alternativa global. O que importa é que `mlt` esteja no PATH — a localização do venv é indiferente para a ferramenta.
+**Installing `mlt` on the host:** `mlt` can be installed in a venv inside the project (`python3 -m venv .venv && pip install mlt`) or in a global venv shared across projects. The `.gitignore` generated by `mlt init` includes `.venv/` for the most common case (local venv), and the README mentions the global alternative. What matters is that `mlt` is on the PATH — the venv location is irrelevant to the tool.
 
-**Atrito de adoção:** herdar de `MLModel` acopla o `model.py` à ferramenta, e um script existente precisa ser adaptado. Mitigações: o `mlt init` entrega o esqueleto, a classe fica em um subpacote sem dependências e continua testável fora da ferramenta.
+**Adoption friction:** inheriting from `MLModel` couples `model.py` to the tool, and an existing script needs to be adapted. Mitigations: `mlt init` delivers the skeleton, the class lives in a subpackage without dependencies, and remains testable outside the tool.
 
-**Guia do cientista:** o contrato precisa estar visível para quem usa a ferramenta, e não só para quem a projeta. O README traz um guia de uma página (classe base a escolher, o que `fit` e `predict` recebem, `requirements.txt` completo, dados e schema), e o `init` oferece os templates `iris` (scikit-learn) e `blank` (esqueleto de `MLModel`). Os dados ficam em `<projeto>/data/` por padrão, ou em outra pasta indicada por `--data`. Erros dentro do `predict` só aparecem ao servir, porque o `check` não treina; isso está dito no guia.
+**Scientist's guide:** the contract needs to be visible to tool users, not just to its designers. The README provides a one-page guide (which base class to choose, what `fit` and `predict` receive, full `requirements.txt`, data and schema), and `init` offers the `iris` (scikit-learn) and `blank` (`MLModel` skeleton) templates. Data lives in `<project>/data/` by default, or in another folder indicated by `--data`. Errors inside `predict` only appear when serving, because `check` does not train; this is stated in the guide.
 
-**Validação do contrato em duas etapas:** o `check` é estático e não importa o `model.py`, porque as dependências do cientista só existem no ambiente isolado, e não no host. A validação profunda (importar, instanciar e conferir os métodos) roda dentro do ambiente, sem rede, antes de criar o run. Assim, erro de contrato continua sem criar run.
+**Two-step contract validation:** `check` is static and does not import `model.py`, because the scientist's dependencies only exist in the isolated environment, not on the host. Deep validation (import, instantiate, and check the methods) runs inside the environment, without network, before creating the run. This way, contract errors still do not create a run.
 
-**`save` e `load` sobre um diretório local:** o modelo escreve e lê um diretório criado pela ferramenta. Quem transporta o pacote entre o disco e um registry remoto é o `RunStore`, então o modelo nunca fala com o registry e o contrato do cientista não muda quando o `RunStore` troca. O limite é que modelos muito grandes ou que gravam direto em destino remoto pediriam uma URI, o que cabe na regra de injeção de parâmetros por nome.
+**`save` and `load` on a local directory:** the model writes and reads a directory created by the tool. Who transports the package between disk and a remote registry is `RunStore`, so the model never talks to the registry and the scientist's contract does not change when `RunStore` changes. The limit is that very large models or ones that write directly to a remote destination would need a URI, which fits the named-parameter injection rule.
 
-## Alternativas consideradas
+## Alternatives considered
 
-Cada alternativa abaixo foi avaliada e descartada, com o motivo.
+Each alternative below was evaluated and discarded, with the reason.
 
-| Alternativa | Por que foi descartada |
+| Alternative | Why it was discarded |
 | --- | --- |
-| Contrato por função (`train()`) | Espalharia convenções; a classe dá reuso e um ponto de verificação |
-| Schema como atributo Pydantic na classe | Mantém a definição no código; o YAML permite revisar o que foi inferido |
-| MLflow para registro de runs | Pesado para o escopo; a interface `RunStore` permite adotá-lo depois |
-| Dados embutidos na imagem | Imagem pesada e sem cache; o volume somente leitura resolve |
-| CLI como cliente de um serviço remoto desde o início | É uma plataforma, e o enunciado não a pede; o núcleo separado permite a evolução |
-| `.mlt/` no diretório atual | O resultado dependeria de onde o comando é executado; ancorei ao projeto |
-| Runtime isolado em dois ambientes | Dois processos e um protocolo; adiado, com `MLModel` já em subpacote sem dependências |
-| Seed só em `params.yaml` | Dependeria de o cientista declará-la; flag e variável de ambiente garantem o registro |
-| Estatísticas de dados no manifesto | Só identificam, não reproduzem; fora do MVP |
+| Contract by function (`train()`) | Would scatter conventions; the class provides reuse and a single verification point |
+| Schema as a Pydantic attribute in the class | Keeps the definition in code; the YAML allows reviewing what was inferred |
+| MLflow for run tracking | Too heavy for the scope; the `RunStore` interface allows adopting it later |
+| Data embedded in the image | Heavy image and no cache; the read-only volume solves it |
+| CLI as a client of a remote service from the start | That is a platform, and the problem statement does not ask for it; the separate core allows evolution |
+| `.mlt/` in the current directory | The result would depend on where the command is executed; anchored to the project |
+| Runtime isolated in two environments | Two processes and a protocol; deferred, with `MLModel` already in a subpackage without dependencies |
+| Seed only in `params.yaml` | Would depend on the scientist declaring it; flag and environment variable guarantee the record |
+| Data statistics in the manifest | Only identify, do not reproduce; outside the MVP |
 
-## Fora do escopo e evolução
+## Out of scope and evolution
 
-O MVP entrega o fluxo local completo; o que segue ficou de fora por escolha.
+The MVP delivers the full local workflow; what follows was left out by choice.
 
-**Fora do escopo:** autenticação, versionamento de dados, rollback e A/B, monitoramento e drift, GPU, treino distribuído, UI, limites de CPU e memória, limpeza de runs antigos e versionamento de rota da API.
+**Out of scope:** authentication, data versioning, rollback and A/B, monitoring and drift, GPU, distributed training, UI, CPU and memory limits, old run cleanup, and API route versioning.
 
-**Evolução, na ordem em que eu faria:**
+**Evolution, in the order I would do it:**
 
-1. Isolar o runtime do `mlt` do ambiente do cientista (SDK sem dependências mais um processo trabalhador).
-2. `DataSource` remoto (S3 e lakehouse, com snapshot).
-3. CLI como cliente de uma API de controle, com `Runner` em AWS Batch ou SageMaker Training.
-4. `RunStore` em S3 e DynamoDB e, depois, um registry de runs e modelos com aliases e promoção.
-5. Bloco de saída opcional no `schema.yaml` e suporte a `predict_proba`.
+1. Isolate the `mlt` runtime from the scientist's environment (dependency-free SDK plus a worker process).
+2. Remote `DataSource` (S3 and lakehouse, with snapshot).
+3. CLI as a client of a control API, with `Runner` on AWS Batch or SageMaker Training.
+4. `RunStore` on S3 and DynamoDB and, later, a run and model registry with aliases and promotion.
+5. Optional output block in `schema.yaml` and support for `predict_proba`.
 
-**Também como evolução:** reduzir o atrito de adoção, aceitando um estimador do scikit-learn ou uma função de treino simples por meio de um adaptador, sem exigir a herança de `MLModel`.
+**Also as evolution:** reducing adoption friction by accepting a scikit-learn estimator or a simple training function through an adapter, without requiring `MLModel` inheritance.
 
-**Suporte a PySpark:** uma `SparkModel` com `save` e `load` nativos, `fit` com injeção de parâmetros por nome, `Runner` de cluster e `DataSource` por URI.
+**PySpark support:** a `SparkModel` with native `save` and `load`, `fit` with named-parameter injection, a cluster `Runner`, and a `DataSource` by URI.
 
-**Prioridades de entrega (7 dias):** P0 é o que não pode faltar: contrato, treino em Docker e venv, manifesto e RunStore, `runs list/show`, `serve` em primeiro plano com `/predict`, testes, README e documentos. P1: `check`, `init` com template `iris`, `verify`, `diff`. P2, cortado primeiro se faltar tempo: `--snapshot-data`, `serve --detach`, `ps`, `stop`, `logs`, reconciliação de runs interrompidos, template `blank`, `--json` e `runs list --status`. O `serve --detach` é P2 porque, sem `stop`, um serviço em segundo plano não teria como ser encerrado. Os fluxos de todos os itens P2 estão fechados no `design.md`, mesmo que não sejam implementados, e o que for cortado será listado aqui.
+**Delivery priorities (7 days):** P0 is what cannot be missing: contract, training in Docker and venv, manifest and RunStore, `runs list/show`, `serve` in the foreground with `/predict`, tests, README, and documents. P1: `check`, `init` with `iris` template, `verify`, `diff`. P2, cut first if time runs short: `--snapshot-data`, `serve --detach`, `ps`, `stop`, `logs`, interrupted run reconciliation, `blank` template, `--json`, and `runs list --status`. `serve --detach` is P2 because, without `stop`, a background service would have no way to be stopped. The flows for all P2 items are closed in `design.md`, even if not implemented, and what is cut will be listed here.
 
-## Tempo gasto e o que faria diferente
+## Time spent and what I would do differently
 
-Esta seção é do autor e fica para depois da implementação.
+This section is the author's and will be filled in after the implementation.
 
-- Tempo aproximado gasto: a preencher.
-- O que faria diferente com mais tempo: a preencher.
+- Approximate time spent: to be filled in.
+- What I would do differently with more time: to be filled in.

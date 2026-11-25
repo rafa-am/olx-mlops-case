@@ -30,7 +30,7 @@ def test_diff_identical_runs(minimal_project):
     run_id2 = train(p["project_dir"], data_dir=p["data_dir"], seed=42, force=True)
     r = _invoke_from(p["project_dir"], "diff", run_id1, run_id2)
     assert r.exit_code == 0, r.output
-    assert "idêntico" in r.output
+    assert "identical" in r.output
 
 
 def test_diff_shows_seed_difference(minimal_project):
@@ -39,7 +39,7 @@ def test_diff_shows_seed_difference(minimal_project):
     run_id2 = train(p["project_dir"], data_dir=p["data_dir"], seed=99, force=True)
     r = _invoke_from(p["project_dir"], "diff", run_id1, run_id2)
     assert r.exit_code == 0, r.output
-    assert "diferente" in r.output
+    assert "different" in r.output
     assert "seed" in r.output.lower() or "42" in r.output
 
 
