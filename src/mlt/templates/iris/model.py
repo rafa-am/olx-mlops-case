@@ -1,7 +1,3 @@
-import pandas as pd
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split
-
 from mlt.model.sklearn import SklearnModel
 
 
@@ -13,6 +9,10 @@ class Model(SklearnModel):
     """
 
     def fit(self, data_dir, params):
+        import pandas as pd
+        from sklearn.ensemble import RandomForestClassifier
+        from sklearn.model_selection import train_test_split
+
         # Load data — data_dir is a read-only Path passed by the tool.
         df = pd.read_csv(data_dir / "iris.csv")
         X = df.drop(columns="species")

@@ -27,6 +27,23 @@ def pytest_collection_modifyitems(config, items):
 
 
 # ---------------------------------------------------------------------------
+# Force venv runner in non-docker tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def _force_venv(request, monkeypatch):
+    """Prevent non-docker tests from accidentally using Docker.
+
+    Tests marked with @pytest.mark.docker manage their own runner; all others
+    must use venv so they remain fast and deterministic regardless of whether
+    the Docker daemon is running.
+    """
+    if not request.node.get_closest_marker("docker"):
+        monkeypatch.setattr("mlt.core.docker_check.docker_available", lambda: False)
+
+
+# ---------------------------------------------------------------------------
 # Iris CSV generator
 # ---------------------------------------------------------------------------
 
@@ -93,7 +110,7 @@ _MINIMAL_MODEL = """\
             return {"accuracy": float(self.model.score(X, y))}
 """
 
-_MINIMAL_REQ = "scikit-learn>=1.3\npandas>=2.0\n"
+_MINIMAL_REQ = "scikit-learn>=1.3\npandas>=2.0\nnumpy>=1.24\n"
 
 
 @pytest.fixture()

@@ -123,6 +123,20 @@ The iris template had no example data, which broke the promise of `mlt init` ("n
 **`--rebuild` deferred.**
 `--rebuild` forces reconstruction of the cached venv environment. The implementation would require changes to `VenvRunner` (deleting the env directory and recreating it) plus the flag in the CLI. Since it is an operational edge case (corrupted environment) that does not affect correctness, it was deferred. `--force` covers the most common case (retraining ignoring idempotency).
 
+## Implementation decisions (test suite overhaul)
+
+**`_force_venv` autouse fixture — non-docker tests never use Docker.**
+Before this fixture, `runner="auto"` with Docker available caused all 142 non-docker tests to build and run Docker containers, blurring the boundary between the two test profiles and making the suite non-deterministic across machines. The fixture monkeypatches `mlt.core.docker_check.docker_available` to return `False` for any test without the `docker` marker. This keeps the non-docker suite fast and deterministic regardless of the host environment.
+
+**Three-tier test suite — `not slow`, `slow`, `docker`.**
+Tests that call `train()` or build a venv are marked `pytest.mark.slow` at the module level. Tests that require the Docker daemon keep `pytest.mark.docker`. Everything else (`contract`, `fingerprint`, `model`, `seed`, etc.) runs in seconds with no external dependencies. The three profiles are: `pytest -m "not slow and not docker"` (~104 tests, seconds), `pytest -m "slow and not docker"` (39 tests, ~8 min with warm cache), and `pytest -m docker` (9 tests, ~30 min).
+
+**Unified requirements across all slow tests — single venv.**
+`minimal_project` and `iris_project` use the same `requirements.txt` content (`scikit-learn>=1.3 + pandas>=2.0 + numpy>=1.24`). The venv cache key is `env_hash(deps, python_minor, mlt_source_hash)`, so a single venv is built and reused across all 39 slow tests. The "bad model" tests (`test_check_deep_venv_fails_bad_model`, `test_docker_runner_deep_check_fails_bad_model`) also use these requirements — the contract error is detected before any package is imported, so the extra dependencies are irrelevant. Same logic for Docker: all 9 tests share one image. Alternative: keep minimal requirements for minimal fixtures — rejected because the savings in cold-build time outweigh the semantic impurity.
+
+**Lazy imports in iris template `model.py`.**
+The original template imported `pandas` and `sklearn` at module level. When `--validate-only` runs inside Docker, it imports `model.py` to check the contract — triggering sklearn/numpy import before `fit` is called. On some CPU configurations this caused SIGILL (exit 132) on the first container run, while later tests passed (numpy already warm). Moving imports inside `fit()` aligns with the lazy-import rule already applied to `SklearnModel`, eliminates the cold-start crash, and reduces container startup time for deep checks.
+
 ## Ambiguities and interpretations
 
 When the problem statement left something open, I chose the simplest interpretation that keeps the tool useful end-to-end.

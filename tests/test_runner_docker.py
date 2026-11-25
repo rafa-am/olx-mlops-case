@@ -89,7 +89,7 @@ def test_docker_runner_deep_check_fails_bad_model(tmp_path):
     project_dir.mkdir()
     # Model with no MLModel subclass.
     (project_dir / "model.py").write_text("def train(): pass\n")
-    (project_dir / "requirements.txt").write_text("scikit-learn>=1.3\n")
+    (project_dir / "requirements.txt").write_text("scikit-learn>=1.3\npandas>=2.0\nnumpy>=1.24\n")
 
     runner = DockerRunner(project_dir / "requirements.txt", "3.12")
     runner.build_env()

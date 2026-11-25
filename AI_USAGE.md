@@ -117,6 +117,24 @@ In the implementation, verification is done with the critical flow tests and by 
 
 **How the author verified:** `mlt init /tmp/demo --template iris && mlt train /tmp/demo` complete without a manual data-generation step.
 
+### Test suite overhaul (2026-11-25)
+
+**What the AI generated:** `_force_venv` autouse fixture, `pytest.mark.slow` marker across 5 files, `test_auto_runner_falls_back_to_venv_when_docker_unavailable`, bug fix in `VenvRunner._venv_ready` and cleanup, unified requirements across all slow tests, lazy imports in iris template.
+
+**Adjustments made during implementation:**
+
+| What the AI did | What was adjusted | Reason |
+| --- | --- | --- |
+| Placed `test_auto_runner_falls_back_to_venv` in `test_trainer.py` (marked slow) | Moved to `test_contract.py` | The test does not build a venv; it should run in the fast profile |
+| `_venv_ready` checked only `bin/python` | Also checks `bin/pip` | A broken cached venv (python without pip) caused FileNotFoundError on all subsequent runs |
+| `venv_dir.rmdir()` on pip install failure | Changed to `shutil.rmtree` | The venv directory is not empty; `rmdir` silently failed, leaving the broken venv in place |
+
+**How the author verified:**
+- Ran `pytest -m 'not docker'`: 143/143 passed in 7:47 (down from 13:08).
+- Confirmed three test profiles: `not slow and not docker` (104 tests, seconds), `slow and not docker` (39), `docker` (9).
+- Verified that all slow tests share a single venv hash (iris requirements = minimal requirements).
+- Confirmed Docker tests share a single image after unifying requirements in `test_docker_runner_deep_check_fails_bad_model`.
+
 ## Reflections
 
 Author's draft, to be revised at the end of the implementation.

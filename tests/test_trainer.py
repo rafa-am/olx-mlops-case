@@ -16,6 +16,8 @@ from mlt.core.errors import ContractError, ExecutionError
 from mlt.core.trainer import train
 from mlt.runstore.store import RunStore
 
+pytestmark = pytest.mark.slow
+
 
 # ---------------------------------------------------------------------------
 # Happy path

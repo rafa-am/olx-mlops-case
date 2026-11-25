@@ -39,4 +39,5 @@ select = ["E", "F", "I"]
 testpaths = ["tests"]
 markers = [
     "docker: tests that require a running Docker daemon (deselect with -m 'not docker')",
+    "slow: tests that build a venv or run full training (deselect with -m 'not slow')",
 ]

@@ -243,3 +243,20 @@ def test_validate_contract_raises_on_missing_requirements(tmp_path):
 def test_validate_contract_passes_on_valid_project(tmp_path):
     project = _make_project(tmp_path, model_py=_VALID_SKLEARN)
     validate_contract(project)  # must not raise
+
+
+# ---------------------------------------------------------------------------
+# Runner selection (unit test, no venv build)
+# ---------------------------------------------------------------------------
+
+
+def test_auto_runner_falls_back_to_venv_when_docker_unavailable(tmp_path, monkeypatch):
+    """runner='auto' must use VenvRunner when Docker is not available."""
+    from mlt.core.trainer import _create_runner
+    from mlt.runners.venv import VenvRunner
+
+    monkeypatch.setattr("mlt.core.docker_check.docker_available", lambda: False)
+    req = tmp_path / "requirements.txt"
+    req.write_text("scikit-learn>=1.3\n")
+    runner = _create_runner("auto", req, "3.10")
+    assert isinstance(runner, VenvRunner)

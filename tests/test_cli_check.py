@@ -96,6 +96,7 @@ def test_check_fails_missing_data_dir(minimal_project):
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_check_deep_venv_passes(minimal_project):
     """--deep --runner venv should pass for a valid project."""
     p = minimal_project
@@ -108,12 +109,13 @@ def test_check_deep_venv_passes(minimal_project):
     assert "deep validation passed" in r.output
 
 
+@pytest.mark.slow
 def test_check_deep_venv_fails_bad_model(tmp_path):
     """--deep should exit 3 when the model has a contract error."""
     project_dir = tmp_path / "bad"
     project_dir.mkdir()
     (project_dir / "model.py").write_text("def train(): pass\n")
-    (project_dir / "requirements.txt").write_text("scikit-learn>=1.3\n")
+    (project_dir / "requirements.txt").write_text("scikit-learn>=1.3\npandas>=2.0\nnumpy>=1.24\n")
     data_dir = project_dir / "data"
     data_dir.mkdir()
     (data_dir / "data.csv").write_text("x\n1\n2\n")

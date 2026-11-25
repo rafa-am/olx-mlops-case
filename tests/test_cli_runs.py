@@ -7,6 +7,8 @@ from mlt.cli.main import cli
 from mlt.core.trainer import train
 from mlt.runstore.store import RunStore
 
+pytestmark = pytest.mark.slow
+
 
 def invoke(*args):
     return CliRunner().invoke(cli, list(args))

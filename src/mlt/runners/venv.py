@@ -178,7 +178,8 @@ class VenvRunner(Runner):
             text=True,
         )
         if result.returncode != 0:
-            venv_dir.rmdir()
+            import shutil
+            shutil.rmtree(venv_dir, ignore_errors=True)
             raise MltEnvironmentError(
                 f"failed to install mlt into venv:\n{result.stderr[-500:]}"
             )
@@ -205,4 +206,4 @@ _TIMEOUT_EXIT_CODE = 124
 
 
 def _venv_ready(venv_dir: Path) -> bool:
-    return (venv_dir / "bin" / "python").exists()
+    return (venv_dir / "bin" / "python").exists() and (venv_dir / "bin" / "pip").exists()

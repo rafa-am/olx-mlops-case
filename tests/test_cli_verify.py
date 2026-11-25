@@ -12,6 +12,8 @@ from click.testing import CliRunner
 from mlt.cli.main import cli
 from mlt.core.trainer import train
 
+pytestmark = pytest.mark.slow
+
 
 def _invoke_from(project_dir, *args):
     old = os.getcwd()

@@ -11,6 +11,8 @@ from click.testing import CliRunner
 
 from mlt.cli.main import cli
 
+pytestmark = pytest.mark.slow
+
 
 def invoke(*args):
     return CliRunner().invoke(cli, list(args))
