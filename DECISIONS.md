@@ -231,7 +231,29 @@ The MVP delivers the full local workflow; what follows was left out by choice.
 
 ## Time spent and what I would do differently
 
-This section is the author's and will be filled in after the implementation.
+Approximate time spent per step (generation + review + correction rounds):
 
-- Approximate time spent: to be filled in.
-- What I would do differently with more time: to be filled in.
+| Step | What was built | Time |
+|------|---------------|------|
+| 1 | Package skeleton, MLModel, contract, errors, exit codes | ~25 min |
+| 2 | venv training, DataSource, RunStore, fingerprint, seed | ~15 min + 8 min test run |
+| 3 | Full CLI: init, check, train, runs, diff, verify | ~25 min + 12 min test run |
+| 3 post | iris.csv bundled in template | ~10 min |
+| Translation | All CLI output and docs to English | ~20 min |
+| 4 | DockerRunner, check --deep | ~30 min |
+| Test suite overhaul | Markers, unified venv, lazy iris imports | ~30 min |
+| 5 | FastAPI serving, mlt serve, 6 bug fixes | ~1 h |
+| 6 | Failure-mode tests, KeyboardInterrupt fix | ~15 min |
+| 7 | README, docs/architecture.md | ~30 min |
+
+**Total: approximately 4–5 hours of active work** (excluding test execution time for slow/docker suites).
+
+**What I would do differently with more time:**
+
+*(Author's section — fill in before the presentation.)*
+
+Suggested topics to address:
+- Whether the design-first approach (whiteboard → design.md → implementation) was worth the investment, and what it avoided
+- The `_mlt_pkg.py` non-editable install complexity — whether a simpler convention (always require editable install in dev) would have been cleaner
+- The decision to keep the `mlt` runtime inside the scientist's isolated environment (same venv/image) instead of a separate worker process — the trade-off between simplicity now and isolation later
+- What would have been cut first if the 7-day deadline had been 3 days

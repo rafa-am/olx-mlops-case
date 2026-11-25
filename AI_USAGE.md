@@ -189,7 +189,8 @@ In the implementation, verification is done with the critical flow tests and by 
 
 ## Reflections
 
-Author's draft, to be revised at the end of the implementation.
+*(Author's section — fill in before the presentation.)*
 
-- **Where AI helped most:** raising alternatives and trade-offs, and listing what was still open.
-- **Where it required more care:** guarantee statements (reproducibility, traceability) and format details, which I had to question to get them precise.
+- **Where AI helped most:** raising alternatives and trade-offs before any code was written, and listing what was still open at the end of each design round.
+- **Where it required more care:** guarantee statements (reproducibility, traceability) and format details — several proposals needed to be questioned to become precise. The table in "What the AI generated and was corrected" shows the pattern.
+- **What surprised me:** the AI was more useful as a design partner (raising what could go wrong, naming the trade-offs) than as a code generator. The code it produced was correct on the first try more often than not, but it required the author's judgment to decide what to build in the first place.
