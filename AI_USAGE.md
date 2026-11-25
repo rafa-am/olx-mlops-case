@@ -168,6 +168,25 @@ In the implementation, verification is done with the critical flow tests and by 
 
 ---
 
+### Step 6 — Failure modes: timeout, Ctrl+C, build failure, fit exception (2026-11-25)
+
+**What the AI generated:** `except KeyboardInterrupt: ctx.exit(130)` in `_MltGroup.invoke`, and `tests/test_failures.py` (4 fast + 3 slow tests).
+
+**Corrections made during implementation:**
+
+| What happened | Fix applied | Reason |
+| --- | --- | --- |
+| Fast tests monkeypatched `mlt.cli.train_cmd.train` | Changed target to `mlt.core.trainer.train` | `train_cmd` imports `train` lazily (inside the function body), so the attribute does not exist at module level; the source module must be patched instead |
+| Fast tests called CLI with bare `tmp_path` | Added `_stub_project()` that writes `model.py`, `requirements.txt`, `data/` | `require_project_dir()` aborts with exit 2 if `model.py` is absent, before `train()` is ever reached |
+
+**How the author verified:**
+- Ran `pytest -m "not slow and not docker"`: 130/130 passed (up from 126).
+- Confirmed exit codes via `result.exit_code` in the four fast tests.
+
+**Time spent:** ~15 min (generation + 2 rounds of fix).
+
+---
+
 ## Reflections
 
 Author's draft, to be revised at the end of the implementation.

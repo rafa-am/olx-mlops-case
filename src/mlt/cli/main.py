@@ -60,6 +60,8 @@ class _MltGroup(click.Group):
         except MltError as exc:
             click.echo(f"error: {exc.message}", err=True)
             ctx.exit(int(exc.exit_code))
+        except KeyboardInterrupt:
+            ctx.exit(130)
 
 
 @click.group(cls=_MltGroup, invoke_without_command=True)

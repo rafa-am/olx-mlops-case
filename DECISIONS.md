@@ -137,6 +137,16 @@ Tests that call `train()` or build a venv are marked `pytest.mark.slow` at the m
 **Lazy imports in iris template `model.py`.**
 The original template imported `pandas` and `sklearn` at module level. When `--validate-only` runs inside Docker, it imports `model.py` to check the contract — triggering sklearn/numpy import before `fit` is called. On some CPU configurations this caused SIGILL (exit 132) on the first container run, while later tests passed (numpy already warm). Moving imports inside `fit()` aligns with the lazy-import rule already applied to `SklearnModel`, eliminates the cold-start crash, and reduces container startup time for deep checks.
 
+## Implementation decisions (step 6)
+
+**KeyboardInterrupt mapping in `_MltGroup.invoke`:** `trainer.py` already catches `KeyboardInterrupt`, marks the run as `failed` (error: `"interrupted"`), and re-raises. The gap was that `_MltGroup.invoke` only caught `MltError`; in a CliRunner test (and in some shell configurations) the re-raised `KeyboardInterrupt` would not be translated to exit code 130. Fix: add `except KeyboardInterrupt: ctx.exit(130)` to `_MltGroup.invoke`. This is the minimal change — no new logic in the core.
+
+**Ctrl+C slow test omitted:** testing a real `KeyboardInterrupt` with a live subprocess would require sending `SIGINT` from a background thread while `runner.run_training()` blocks. The added complexity and flakiness (timing-sensitive) are not justified when the fast test already covers the exit-code mapping, and the actual `except KeyboardInterrupt` path in `trainer.py` is exercised by manual end-to-end verification.
+
+**Two-tier test design for failures:** fast tests (no venv) mock `mlt.core.trainer.train` and exercise only the CLI exit-code mapping. Slow tests create real venvs and verify run-store state after each failure. The separation keeps the fast loop under 25 seconds while still having end-to-end coverage for the most critical failure paths.
+
+**`mlt.core.trainer.train` as the monkeypatch target:** `train_cmd` imports `train` lazily (inside the function body), so `mlt.cli.train_cmd.train` does not exist as a module attribute. Monkeypatching the source module (`mlt.core.trainer.train`) works because the lazy import binds at call time and picks up the patched object.
+
 ## Implementation decisions (step 5)
 
 **FastAPI app as a factory with injected model — `create_app(manifest, schema, model)`.**
