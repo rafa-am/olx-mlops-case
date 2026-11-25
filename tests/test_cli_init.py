@@ -47,6 +47,24 @@ def test_init_refuses_nonempty_dir(tmp_path):
     assert "error:" in r.output or "not empty" in r.output
 
 
+def test_init_accepts_dir_with_only_venv(tmp_path):
+    """mlt init . after creating a local venv should succeed."""
+    dest = tmp_path / "proj"
+    dest.mkdir()
+    (dest / ".venv").mkdir()          # simulates: python3 -m venv .venv
+    r = invoke("init", str(dest))
+    assert r.exit_code == 0, r.output
+    assert (dest / "model.py").exists()
+
+
+def test_init_accepts_dir_with_only_git(tmp_path):
+    dest = tmp_path / "proj"
+    dest.mkdir()
+    (dest / ".git").mkdir()
+    r = invoke("init", str(dest))
+    assert r.exit_code == 0, r.output
+
+
 def test_init_accepts_empty_existing_dir(tmp_path):
     dest = tmp_path / "empty"
     dest.mkdir()
