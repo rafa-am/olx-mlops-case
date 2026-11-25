@@ -50,9 +50,16 @@ def _print_results(results: list[CheckResult]) -> bool:
     "--deep",
     is_flag=True,
     default=False,
-    help="Build the environment and validate inside it (not yet implemented).",
+    help="Build the environment and validate inside it (import, instantiate, check methods).",
 )
-def check_cmd(directory: str, data_dir: str | None, deep: bool) -> None:
+@click.option(
+    "--runner",
+    default="auto",
+    show_default=True,
+    type=click.Choice(["auto", "venv", "docker"], case_sensitive=False),
+    help="Runner to use for --deep (auto tries Docker first).",
+)
+def check_cmd(directory: str, data_dir: str | None, deep: bool, runner: str) -> None:
     """Validate the project contract without training."""
     project_dir = require_project_dir(directory)
     effective_data = Path(data_dir).resolve() if data_dir else project_dir / "data"
@@ -93,8 +100,7 @@ def check_cmd(directory: str, data_dir: str | None, deep: bool) -> None:
     has_error = _print_results(results)
 
     if deep:
-        click.echo()
-        click.echo(click.style("  ⚠ --deep not yet implemented", fg="yellow"))
+        has_error = _run_deep(project_dir, python_minor, runner) or has_error
 
     click.echo()
     if has_error:
@@ -102,3 +108,38 @@ def check_cmd(directory: str, data_dir: str | None, deep: bool) -> None:
         raise ContractError("one or more contract checks failed")
     else:
         click.echo(click.style("ok", fg="green"))
+
+
+def _run_deep(project_dir: Path, python_minor: str, runner_name: str) -> bool:
+    """Build the environment and validate inside it. Returns True if error found."""
+    from mlt.core.errors import MltEnvironmentError
+    from mlt.core.trainer import _create_runner
+
+    click.echo()
+
+    req_txt = project_dir / "requirements.txt"
+    runner_inst = _create_runner(runner_name, req_txt, python_minor)
+
+    def _on_slow() -> None:
+        click.echo("  building environment (may be slow the first time)...")
+
+    click.echo("  building environment...")
+    try:
+        runner_inst.build_env(on_slow_build=_on_slow)
+    except MltEnvironmentError:
+        raise  # propagates to _MltGroup.invoke → exit 6
+
+    exit_code, stderr = runner_inst.run_deep_check(project_dir)
+
+    if exit_code == 0:
+        results = [CheckResult(level=Level.OK, message="deep validation passed")]
+    else:
+        # Extract the first meaningful line from worker stderr.
+        msg = next(
+            (line for line in stderr.splitlines() if line.strip()),
+            "deep validation failed inside the environment",
+        )
+        results = [CheckResult(level=Level.ERROR, message=msg)]
+
+    _print_results(results)
+    return exit_code != 0

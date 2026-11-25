@@ -49,3 +49,15 @@ class Runner(ABC):
 
         Writes stdout + stderr to ``run_dir/train.log``.
         """
+
+    @abstractmethod
+    def run_deep_check(
+        self,
+        project_dir: Path,
+        timeout: int = 60,
+    ) -> tuple[int, str]:
+        """Run the worker in validate-only mode.
+
+        Returns (exit_code, stderr_text).
+        exit_code 0 → validation passed; 3 → contract error.
+        """

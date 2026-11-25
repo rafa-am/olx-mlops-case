@@ -47,7 +47,8 @@ from mlt.core.fingerprint import (
 )
 from mlt.core.seed import resolve_seed
 from mlt.datasources.local import LocalDataSource
-from mlt.runners.venv import VenvRunner, _TIMEOUT_EXIT_CODE
+from mlt.runners.venv import VenvRunner
+from mlt.runners.venv import _TIMEOUT_EXIT_CODE
 from mlt.runstore.manifest import Manifest
 from mlt.runstore.store import RunStore
 
@@ -255,13 +256,29 @@ def _load_params(project_dir: Path) -> dict:
 
 
 def _create_runner(runner_name: str, req_txt: Path, python_minor: str):
-    """Instantiate the right runner; for now only venv is implemented."""
+    """Instantiate the right runner based on the requested name."""
+    from mlt.core.docker_check import docker_available
+    from mlt.runners.docker import DockerRunner
+
     if runner_name == "docker":
-        raise MltEnvironmentError(
-            "Docker runner is not yet implemented (etapa 4). "
-            "Use --runner venv or --runner auto."
+        if not docker_available():
+            raise MltEnvironmentError(
+                "Docker is not available or the daemon is not running. "
+                "Use --runner venv or start the Docker daemon."
+            )
+        return DockerRunner(req_txt, python_minor)
+
+    if runner_name == "auto":
+        if docker_available():
+            return DockerRunner(req_txt, python_minor)
+        import click
+        click.echo(
+            "  warning: Docker not available, falling back to venv (isolation: none)",
+            err=True,
         )
-    # auto or venv
+        return VenvRunner(req_txt, python_minor)
+
+    # explicit venv
     return VenvRunner(req_txt, python_minor)
 
 

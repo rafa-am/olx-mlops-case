@@ -137,6 +137,23 @@ class VenvRunner(Runner):
             # Return a sentinel; trainer maps this to MltTimeoutError.
             return _TIMEOUT_EXIT_CODE
 
+    def run_deep_check(self, project_dir: Path, timeout: int = 60) -> tuple[int, str]:
+        """Run the worker in validate-only mode inside the venv."""
+        eh = self.get_env_hash()
+        venv_dir = _ENVS_DIR / eh
+        python_bin = str(venv_dir / "bin" / "python")
+
+        cmd = [
+            python_bin, "-m", "mlt._worker.train",
+            "--project-dir", str(project_dir),
+            "--validate-only",
+        ]
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+            return result.returncode, result.stderr
+        except subprocess.TimeoutExpired:
+            return _TIMEOUT_EXIT_CODE, "deep check timed out"
+
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------

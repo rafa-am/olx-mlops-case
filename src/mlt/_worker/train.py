@@ -114,9 +114,11 @@ def _infer_schema(model_instance) -> dict | None:
 def main() -> None:
     parser = argparse.ArgumentParser(prog="mlt._worker.train")
     parser.add_argument("--project-dir", required=True, type=Path)
-    parser.add_argument("--data-dir", required=True, type=Path)
-    parser.add_argument("--run-dir", required=True, type=Path)
-    parser.add_argument("--seed", required=True, type=int)
+    parser.add_argument("--data-dir", type=Path)
+    parser.add_argument("--run-dir", type=Path)
+    parser.add_argument("--seed", type=int)
+    parser.add_argument("--validate-only", action="store_true", default=False,
+                        help="Run deep validation only; do not train.")
     args = parser.parse_args()
 
     project_dir: Path = args.project_dir
@@ -126,6 +128,10 @@ def main() -> None:
 
     # --- Deep validation (inside the environment) -------------------------
     model_cls = _load_model_class(project_dir)
+
+    if args.validate_only:
+        print("deep validation passed")
+        sys.exit(0)
 
     # --- Apply seed -------------------------------------------------------
     from mlt.core.seed import apply_seed

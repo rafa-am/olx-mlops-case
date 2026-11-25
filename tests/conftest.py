@@ -10,6 +10,23 @@ import pytest
 
 
 # ---------------------------------------------------------------------------
+# Skip docker-marked tests when Docker is unavailable
+# ---------------------------------------------------------------------------
+
+
+def pytest_collection_modifyitems(config, items):
+    from mlt.core.docker_check import docker_available
+
+    if docker_available():
+        return  # Docker is running; nothing to skip
+
+    skip_docker = pytest.mark.skip(reason="Docker daemon not available")
+    for item in items:
+        if item.get_closest_marker("docker"):
+            item.add_marker(skip_docker)
+
+
+# ---------------------------------------------------------------------------
 # Iris CSV generator
 # ---------------------------------------------------------------------------
 
