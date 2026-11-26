@@ -191,6 +191,6 @@ In the implementation, verification is done with the critical flow tests and by 
 
 *(Author's section — fill in before the presentation.)*
 
-- **Where AI helped most:** raising alternatives and trade-offs before any code was written, and listing what was still open at the end of each design round.
-- **Where it required more care:** guarantee statements (reproducibility, traceability) and format details — several proposals needed to be questioned to become precise. The table in "What the AI generated and was corrected" shows the pattern.
+- **Where AI helped most:** in building the codebase, once all planning and decisions had already been structured. At that point the AI flows more organically — taking over the writing of code, running tests, iterating, and correcting.
+- **Where it required more care:** in the ideation phase, when raising alternatives and building the implementation plan. At that stage there is a more constant exchange between what the AI suggests and what I bring from domain experience — proposing directions that the AI did not originally identify as stronger compared to its own proposals.
 - **What surprised me:** the AI was more useful as a design partner (raising what could go wrong, naming the trade-offs) than as a code generator. The code it produced was correct on the first try more often than not, but it required the author's judgment to decide what to build in the first place.
