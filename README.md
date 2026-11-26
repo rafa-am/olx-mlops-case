@@ -215,7 +215,7 @@ Swagger UI with an interactive editor is available at `http://127.0.0.1:8000/doc
 
 | Situation | Base class | What you implement |
 |-----------|------------|--------------------|
-| scikit-learn (or any joblib-compatible estimator) | `SklearnModel` | `fit` only; assign `self.model` |
+| scikit-learn (or any joblib-compatible estimator) | `SklearnModel` | `fit` only (minimum); assign `self.model`. `predict`, `save`, and `load` are provided — override only if needed |
 | Any other framework (PyTorch, XGBoost, custom) | `MLModel` | `fit`, `predict`, `save`, `load` |
 
 Start with the template:

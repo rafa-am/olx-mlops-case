@@ -328,7 +328,7 @@ Enumeration in `mlt.core`; the CLI only translates exceptions to codes. Errors g
 
 ## 14. Demo
 
-Iris (150 samples, 4 features, 3 classes), exported to `data/iris.csv` with snake_case columns (`sepal_length`, `sepal_width`, `petal_length`, `petal_width`). RandomForest with `n_estimators` and `max_depth` in `params.yaml`. Docker as the primary mode, venv also working. The template inherits from `SklearnModel`, so `model.py` only writes `fit`, and has short comments explaining each part.
+Iris (150 samples, 4 features, 3 classes), exported to `data/iris.csv` with snake_case columns (`sepal_length`, `sepal_width`, `petal_length`, `petal_width`). RandomForest with `n_estimators` and `max_depth` in `params.yaml`. Docker as the primary mode, venv also working. The template inherits from `SklearnModel`. It implements all four methods (`fit`, `predict`, `save`, `load`), with `predict`, `save`, and `load` delegating to `super()` and documented with docstrings and examples — so scientists understand what each method does and when to override.
 
 ## 15. Tests
 

@@ -19,7 +19,7 @@ The CLI is a thin layer over `mlt.core`. `DataSource`, `Runner`, and `RunStore` 
 The minimum contract is a folder with `requirements.txt` and `model.py`. `params.yaml`, `schema.yaml`, and data are optional or external.
 
 - `model.py` defines exactly one subclass of `MLModel`, with `fit(data_dir, params)` (returns a dict of metrics) and `predict(inputs)` (list of records as input, list of predictions as output).
-- `save` and `load` are also abstract in the core. The optional `SklearnModel` class provides a default `predict` and `save`/`load` via joblib, and the scientist only writes `fit` and assigns `self.model`.
+- `save` and `load` are also abstract in the core. The optional `SklearnModel` class provides a default `predict` and `save`/`load` via joblib; the minimum a scientist writes is `fit`, assigning `self.model`. The iris template also shows `predict`, `save`, and `load` explicitly (delegating to `super()`) so scientists understand what each method does and when to override.
 - The seed arrives in `self.seed`; the scientist uses it in estimators.
 - `params.yaml`, if it exists, becomes the `params` argument. `schema.yaml`, if it exists, declares the input features; without it, the schema is inferred from `feature_names_in_`.
 
