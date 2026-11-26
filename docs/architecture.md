@@ -64,6 +64,7 @@ flowchart LR
 
     subgraph CORE [src/mlt/core]
         TR[trainer.py] & FP[fingerprint.py] & SEED[seed.py] & CONTR[contract.py]
+        RUNS[runs.py] & DIFF[diff.py] & VER[verify.py] & SET[settings.py] & PROJ[project.py]
     end
 
     subgraph MODEL [src/mlt/model]
@@ -145,6 +146,20 @@ flowchart LR
 | `RunStore` (files + SQLite) | S3 artifacts + DynamoDB index | Manifest stays the source of truth; DynamoDB replaces SQLite |
 | `mlt serve` (foreground subprocess) | ECS Fargate task behind ALB | `serve --detach` maps to a task launch; `ps`/`stop` map to task describe/stop |
 | CodeBuild | Triggered on Git push | Builds and pushes `mlt-env:<hash>` to ECR; Docker layer cache = same speed |
+
+### Core isolation (v0.2.0)
+
+`mlt.core` is the pure logic layer: no imports of `click` or `typer`, no printing. Each command module is a thin formatter over a core function that returns structured data:
+
+| Core function | Returns | Used by |
+|---|---|---|
+| `runs.list_runs` / `describe_run` | `list[Manifest]` / `Manifest` | `runs_cmd` |
+| `diff.diff_runs` / `diff_runs_by_id` | `RunDiff` dataclass | `diff_cmd` |
+| `verify.verify_run` | `VerifyResult` dataclass | `verify_cmd` |
+| `settings.resolve_effective_settings` | `EffectiveSettings` dataclass | `train_cmd` |
+| `project.open_project` | `Path` | `discovery.require_project_dir` |
+
+This boundary is enforced by `tests/test_core_isolation.py`, which asserts that none of these modules import `click`, `typer`, or `mlt.cli`.
 
 **What does not change:** the scientist's contract (`model.py`, `requirements.txt`, `params.yaml`, `schema.yaml`) and the manifest format. A run produced locally and one produced on AWS are identical JSON objects, and `diff`/`verify` work across both.
 

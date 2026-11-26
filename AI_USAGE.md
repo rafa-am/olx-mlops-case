@@ -187,6 +187,35 @@ In the implementation, verification is done with the critical flow tests and by 
 
 ---
 
+### Step 7 — Core isolation: Fase 0 and Fase 1 (2026-11-26)
+
+**What the AI generated:** characterization tests (`test_characterization.py`, 21 tests), core extraction modules (`core/runs.py`, `core/diff.py`, `core/verify.py`, `core/settings.py`, `core/project.py`), corresponding unit tests, isolation contract tests (`test_core_isolation.py`), and updated CLI cmd modules.
+
+**Corrections made during implementation:**
+
+| What happened | Fix applied | Reason |
+|---|---|---|
+| `CliRunner(mix_stderr=False)` in characterization tests | Removed `mix_stderr` argument | Not available in this Click version |
+| `char_project` fixture trained without `runner="venv"` | Added `runner="venv"` to all `train()` calls in session fixture | Fixture runs outside `_force_venv` monkeypatch scope; runs were recorded with `runner: docker`, which failed when verify ran with docker unavailable |
+| `test_runs_show_failed_no_outputs_section` asserted OUTPUTS absent | Changed to assert `failed` status | A run forced-failed after succeeded still has outputs in the manifest |
+| `test_diff_runs_by_id_accepts_prefix` used 8-char prefix | Changed to test `latest` alias instead | Two runs created in the same second share the same 8-char date prefix, making it ambiguous |
+| `verify_run` raised `ExecutionError` on divergence with result attached | Changed to always return `VerifyResult(reproduced=False)` | Avoids modifying the exception class; cleaner for callers (UI or CLI) that inspect the result |
+| `/tmp` disk full during tests | Cleared stale venv caches in `~/.mlt/envs/` (~5 GB freed) | Each commit to `src/mlt/` invalidates the `mlt_source_hash`, creating a new cached venv; old ones accumulate |
+
+**Bug found during manual testing:**
+
+`mlt serve latest` raised `TypeError: Model.load() missing 1 required positional argument: 'path'`. The iris template defined `load` as an instance method, shadowing the `@classmethod` from `SklearnModel`. The same error was present in README and `docs/design.md` examples. Fixed in all three places; regression test added.
+
+**How the author verified:**
+- Characterization tests (21) green before and after each extraction commit.
+- Isolation tests (22) confirm `mlt.core` does not import `click`, `typer`, or `mlt.cli`.
+- Full non-slow suite: 156/156 passed after all extractions.
+- Manual end-to-end: `mlt init`, `mlt train`, `mlt runs list`, `mlt runs show`, `mlt serve` tested on a real project.
+
+**Time spent:** ~4h (planning, extraction commits, disk issue diagnosis, serve bug fix).
+
+---
+
 ## Reflections
 
 *(Author's section — fill in before the presentation.)*
