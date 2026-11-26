@@ -51,11 +51,10 @@ def runs_cmd() -> None:
               help="Show all runs (default: last 20).")
 def runs_list(show_all: bool) -> None:
     """List recent training runs."""
-    from mlt.runstore.store import RunStore
+    from mlt.core.runs import list_runs
 
     project_dir = find_project_dir()
-    store = RunStore(project_dir)
-    runs = store.list_runs(limit=20, show_all=show_all)
+    runs = list_runs(project_dir, limit=20, show_all=show_all)
 
     if not runs:
         click.echo("no runs yet")
@@ -82,11 +81,12 @@ def runs_list(show_all: bool) -> None:
 @click.argument("run_id")
 def runs_show(run_id: str) -> None:
     """Show the details of a run."""
+    from mlt.core.runs import describe_run
     from mlt.runstore.store import RunStore
 
     project_dir = find_project_dir()
-    store = RunStore(project_dir)
-    m = store.get_run(run_id)
+    m = describe_run(project_dir, run_id)
+    store = RunStore(project_dir)  # still needed for run_dir() in artifact path
     d = m.to_dict()
 
     # --- Identity ---
