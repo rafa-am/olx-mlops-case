@@ -12,18 +12,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from mlt.core.errors import UsageError
-
 
 def require_project_dir(path: str | Path = ".") -> Path:
     """Resolve an explicit project path; raise UsageError if model.py is absent."""
-    resolved = Path(path).resolve()
-    if not (resolved / "model.py").exists():
-        raise UsageError(
-            f"model.py not found in {resolved}. "
-            "Pass the project directory as an argument or run from inside it."
-        )
-    return resolved
+    from mlt.core.project import open_project
+
+    return open_project(path)
 
 
 def find_project_dir(start: str | Path = ".") -> Path:
