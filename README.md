@@ -446,6 +446,12 @@ The following flows are designed but not yet implemented:
 Requires the development environment active (see [Installation → Development](#installation)). Run from the project root:
 
 ```bash
+# Lint and format
+ruff check src/ tests/
+ruff format src/ tests/
+```
+
+```bash
 # Unit tests — fast loop (~20s, no Docker required)
 pytest -m "not slow and not docker"
 
