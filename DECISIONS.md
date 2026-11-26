@@ -2,7 +2,7 @@
 
 ## Overview
 
-`mlt` is a Python package with a CLI that takes the data scientist from reproducible training to a REST API, from Python code alone.
+`mlt` (**M**odel **L**ifecycle **T**oolkit) is a Python package with a CLI that takes the data scientist from reproducible training to a REST API, from Python code alone.
 
 The scientist provides `requirements.txt`, `model.py` (a class that inherits from `MLModel`), data and, optionally, `params.yaml` and `schema.yaml`. The tool handles isolation, tracking, and serving.
 

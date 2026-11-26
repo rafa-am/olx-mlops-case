@@ -113,6 +113,7 @@ def train_cmd(
             click.echo(f"  {key:<8}  {val:.4f}")
 
     click.echo()
+    click.echo("Suggested steps:")
     click.echo(f"  mlt runs show {run_id}")
     click.echo(f"  mlt serve {run_id}")
 

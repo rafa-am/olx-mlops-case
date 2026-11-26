@@ -1,4 +1,4 @@
-# mlt Design
+# mlt — Model Lifecycle Toolkit: Design
 
 Specification of the MVP, consolidated from the design decisions. Complements `DECISIONS.md` (which records the why) with the what to build.
 

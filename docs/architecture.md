@@ -1,4 +1,4 @@
-# mlt Architecture
+# mlt — Model Lifecycle Toolkit: Architecture
 
 Two views: the local MVP (what is implemented) and production on AWS (design only, not implemented).
 
