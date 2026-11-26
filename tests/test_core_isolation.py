@@ -71,3 +71,19 @@ def test_core_diff_does_not_import_mlt_cli():
     imported = _import_fresh("mlt.core.diff")
     cli_modules = {m for m in imported if m.startswith("mlt.cli")}
     assert not cli_modules, f"mlt.core.diff imported CLI modules: {cli_modules}"
+
+
+def test_core_verify_does_not_import_click():
+    imported = _top_level(_import_fresh("mlt.core.verify"))
+    assert "click" not in imported
+
+
+def test_core_verify_does_not_import_typer():
+    imported = _top_level(_import_fresh("mlt.core.verify"))
+    assert "typer" not in imported
+
+
+def test_core_verify_does_not_import_mlt_cli():
+    imported = _import_fresh("mlt.core.verify")
+    cli_modules = {m for m in imported if m.startswith("mlt.cli")}
+    assert not cli_modules, f"mlt.core.verify imported CLI modules: {cli_modules}"
