@@ -154,7 +154,7 @@ Inferred schema: from `feature_names_in_` of the trained model (sklearn with Dat
 | Command | Function |
 |---|---|
 | `mlt --version` | shows the `mlt` version, the Python running `mlt`, and what was detected (`docker: available` or `unavailable`, daemon running) |
-| `mlt init <folder> --template iris` or `--template blank` | creates a new project from the template (`iris`: scikit-learn example; `blank`: `MLModel` skeleton with TODO, for other frameworks). Runs from any folder. Refuses an existing non-empty folder (exit 2), without overwriting. Includes a `.gitignore` with `.mlt/` (without `git init`) and prints the next steps (`cd`, `check`, `train`). `--force` for existing folder is P2 |
+| `mlt init <folder> --template iris` | creates a new project from the iris template (scikit-learn example). Runs from any folder. Refuses an existing non-empty folder (exit 2), without overwriting. Includes a `.gitignore` with `.mlt/` (without `git init`) and prints the next steps (`cd`, `check`, `train`). (`--template blank` and `--force` are P2.) |
 | `mlt check [folder]` | validates the contract statically, without training (reads the root); `--deep` builds the environment and validates inside it |
 | `mlt train [folder]` | trains and records a run |
 | `mlt runs list` / `mlt runs show <run_id>` | lists and details runs (`--json` optional) |
@@ -163,7 +163,7 @@ Inferred schema: from `feature_names_in_` of the trained model (sklearn with Dat
 | `mlt serve <run_id>` (or `latest`) | starts the API (`--detach`, `--port`, `--host`) |
 | `mlt ps` / `mlt stop <run_id>` / `mlt logs <run_id>` | service management |
 
-Flags for `train`: `--data <folder>` (default `<project>/data/`), `--runner auto|docker|venv`, `--python 3.12` (precedence: flag, then `.python-version`, then default), `--seed N`, `--timeout 600`, `--snapshot-data`, `--rebuild`, `--force`, `--verbose`.
+Flags for `train`: `--data <folder>` (default `<project>/data/`), `--runner auto|docker|venv`, `--python 3.12` (precedence: flag, then `.python-version`, then default), `--seed N`, `--timeout 600`, `--force`, `--verbose`. (`--snapshot-data` and `--rebuild` are P2.)
 
 `check` is **static**: reads `model.py` without importing it (the scientist's dependencies only exist in the isolated environment, not on the host). It validates: unique subclass, required methods defined, valid `params.yaml` and `schema.yaml`, `requirements.txt` present, and valid seed. Deep validation (import, instantiate, and check the methods) runs inside the environment, without network, in `train` and in `check --deep`.
 
@@ -246,7 +246,7 @@ Run contents: `model/` (directory created by `save`), `metrics.json`, `manifest.
   "manifest_version": 1,
   "run_id": "20261123-214900-a1b2c3",
   "status": "succeeded",
-  "created_at": "...", "duration_s": 42.1,
+  "created_at": "...", "finished_at": "...", "duration_s": 42.1,
   "inputs": {
     "code":   {"hash": "...", "git_commit": "...", "dirty": false},
     "params": {"hash": "...", "values": {"n_estimators": 100}},
@@ -258,7 +258,7 @@ Run contents: `model/` (directory created by `save`), `metrics.json`, `manifest.
     "seed": 42, "seed_source": "default"
   },
   "fingerprint": "...",
-  "environment": {"runner": "docker", "image_digest": "...", "python": "3.12.4", "isolation": "no-network"}   // venv: "none",
+  "environment": {"runner": "docker", "env_hash": "...", "python": "3.12.4", "isolation": "no-network"},   // venv: "none"
   "outputs": {
     "metrics": {"accuracy": 0.97},
     "schema": {"hash": "...", "source": "inferred"},
