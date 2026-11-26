@@ -45,24 +45,19 @@ def train_cmd(
     project_dir = require_project_dir(directory)
     effective_data = Path(data_dir).resolve() if data_dir else project_dir / "data"
 
-    # Resolve effective values to show the preamble before training starts.
-    from mlt.core.fingerprint import resolve_python
-    from mlt.core.seed import resolve_seed
+    from mlt.core.settings import resolve_effective_settings
 
-    python_minor, python_requested, python_source = resolve_python(project_dir, python_ver)
-    seed_val, seed_origin = resolve_seed(seed, os.environ)
+    settings = resolve_effective_settings(
+        project_dir,
+        python_flag=python_ver,
+        seed_flag=seed,
+        runner=runner,
+        env=os.environ,
+    )
 
-    from mlt.core.docker_check import docker_available
-
-    if runner == "auto":
-        effective_runner = "docker" if docker_available() else "venv"
-        runner_display = f"auto → {effective_runner}"
-    else:
-        runner_display = runner
-
-    click.echo(f"  python  {python_requested}  ({python_source})")
-    click.echo(f"  runner  {runner_display}")
-    click.echo(f"  seed    {seed_val}  ({seed_origin})")
+    click.echo(f"  python  {settings.python_requested}  ({settings.python_source})")
+    click.echo(f"  runner  {settings.runner_display}")
+    click.echo(f"  seed    {settings.seed}  ({settings.seed_source})")
     click.echo()
 
     # Callback printed when the env build is detected as slow (first time).

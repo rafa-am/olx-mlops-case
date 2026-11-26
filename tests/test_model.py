@@ -142,3 +142,21 @@ def test_sklearn_load_restores_predict_capability(tmp_path):
     result = loaded.predict([{"a": 1, "b": 2}])
     assert isinstance(result, list)
     assert len(result) == 1
+
+
+def test_iris_template_load_is_classmethod(tmp_path):
+    """Regression: iris Model.load must be a classmethod so server.py can call
+    Model.load(path) without an instance. The bug was load defined as an
+    instance method, causing TypeError at serve time."""
+    import inspect
+    import importlib.util
+
+    import mlt
+    model_path = Path(mlt.__file__).parent / "templates" / "iris" / "model.py"
+    spec = importlib.util.spec_from_file_location("iris_model", model_path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    assert inspect.ismethod(module.Model.load), (
+        "Model.load must be a bound classmethod, not an instance method"
+    )

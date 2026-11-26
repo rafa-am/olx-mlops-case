@@ -123,6 +123,20 @@ The iris template had no example data, which broke the promise of `mlt init` ("n
 **`--rebuild` deferred.**
 `--rebuild` forces reconstruction of the cached venv environment. The implementation would require changes to `VenvRunner` (deleting the env directory and recreating it) plus the flag in the CLI. Since it is an operational edge case (corrupted environment) that does not affect correctness, it was deferred. `--force` covers the most common case (retraining ignoring idempotency).
 
+## Implementation decisions (v0.2.0 — core isolation)
+
+**Core extracted from CLI: no click/typer in `mlt.core`.**
+`runs_cmd`, `diff_cmd`, `verify_cmd`, `train_cmd`, and `discovery.py` previously contained business logic mixed with formatting. The extraction moved each piece to a pure function in `mlt.core` returning a typed dataclass (`RunDiff`, `VerifyResult`, `EffectiveSettings`), leaving the CLI as a thin formatter. This is the prerequisite for the Web UI, which calls the same core without going through Click. The boundary is enforced by `test_core_isolation.py`. The alternative (keeping logic in cmd modules and duplicating it in the UI) was discarded to avoid drift between CLI and UI behavior.
+
+**`verify_run` returns `VerifyResult` on divergence instead of raising.**
+An earlier draft raised `ExecutionError` when metrics diverged, attaching the result to the exception. This was replaced by always returning `VerifyResult(reproduced=False, ...)` and letting the CLI raise `ExecutionError` when it needs exit code 4. Reasons: (1) it avoids modifying the exception hierarchy to carry structured data, (2) the UI can inspect `reproduced` without catching exceptions, (3) it makes the core easier to test without try/except.
+
+**`VerifyResult` carries fingerprint hashes explicitly.**
+To format the divergence message (`fp_a[:8] ≠ fp_b[:8]`), the CLI originally re-fetched the manifests from the store after `verify_run` returned. This was replaced by storing `orig_fingerprint` and `new_fingerprint` directly in `VerifyResult`, eliminating the extra store reads and making the result self-contained.
+
+**`iris/model.load` bug: missing `@classmethod` and `return`.**
+The iris template defined `load` as an instance method (`def load(self, path)`), shadowing the `@classmethod` from `SklearnModel`. `server.py` calls `model_cls.load(path)`, which passes `path` as `self` and fails with `TypeError`. Fixed by adding `@classmethod` and `return super().load(path)`. The same error appeared in the README and `docs/design.md` examples, corrected in the same commit. A regression test (`test_iris_template_load_is_classmethod`) was added to `test_model.py`.
+
 ## Implementation decisions (test suite overhaul)
 
 **`_force_venv` autouse fixture — non-docker tests never use Docker.**

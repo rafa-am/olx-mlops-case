@@ -280,14 +280,15 @@ class Model(SklearnModel):
         """
         super().save(path)
 
-    def load(self, path):
+    @classmethod
+    def load(cls, path):
         """Restore the model from a directory.
 
         path is a pathlib.Path to the same directory passed to save().
         SklearnModel loads self.model from path/model.joblib via joblib.
         Override if you customised save().
         """
-        super().load(path)
+        return super().load(path)
 ```
 
 ### Rules
