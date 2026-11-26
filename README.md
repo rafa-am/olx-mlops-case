@@ -256,10 +256,39 @@ class Model(SklearnModel):
             random_state=self.seed,
         ).fit(X_tr, y_tr)
         return {"accuracy": float(self.model.score(X_te, y_te))}
-```
 
-`SklearnModel` provides `predict`, `save`, and `load` automatically via joblib.  
-`predict` accepts features in any column order; it reorders them to match training.
+    def predict(self, inputs):
+        """Return one prediction per input record.
+
+        inputs is a list of dicts with feature names as keys::
+
+            predict([{"sepal_length": 5.1, "sepal_width": 3.5,
+                      "petal_length": 1.4, "petal_width": 0.2}])
+            # returns ["setosa"]
+
+        SklearnModel reorders columns to match training order and calls
+        self.model.predict(). Override for custom pre/post-processing.
+        """
+        return super().predict(inputs)
+
+    def save(self, path):
+        """Persist the model to a directory.
+
+        path is a pathlib.Path to a local directory created by mlt.
+        SklearnModel serialises self.model to path/model.joblib via joblib.
+        Override if your model requires a different serialisation format.
+        """
+        super().save(path)
+
+    def load(self, path):
+        """Restore the model from a directory.
+
+        path is a pathlib.Path to the same directory passed to save().
+        SklearnModel loads self.model from path/model.joblib via joblib.
+        Override if you customised save().
+        """
+        super().load(path)
+```
 
 ### Rules
 

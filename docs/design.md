@@ -73,14 +73,15 @@ One page that tells the scientist what is expected of them:
 ### Minimal example (this is the `model.py` of the `iris` template)
 
 ```python
-import pandas as pd
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split
 from mlt.model.sklearn import SklearnModel
 
 
 class Model(SklearnModel):
     def fit(self, data_dir, params):
+        import pandas as pd
+        from sklearn.ensemble import RandomForestClassifier
+        from sklearn.model_selection import train_test_split
+
         df = pd.read_csv(data_dir / "iris.csv")
         X, y = df.drop(columns="species"), df["species"]
         X_tr, X_te, y_tr, y_te = train_test_split(
@@ -92,6 +93,21 @@ class Model(SklearnModel):
             random_state=self.seed,
         ).fit(X_tr, y_tr)
         return {"accuracy": float(self.model.score(X_te, y_te))}
+
+    def predict(self, inputs):
+        # SklearnModel reorders columns to match training order and calls
+        # self.model.predict(). Override for custom pre/post-processing.
+        return super().predict(inputs)
+
+    def save(self, path):
+        # path is a pathlib.Path; SklearnModel saves to path/model.joblib.
+        # Override if your model requires a different serialisation format.
+        super().save(path)
+
+    def load(self, path):
+        # path is a pathlib.Path; SklearnModel loads from path/model.joblib.
+        # Override if you customised save().
+        super().load(path)
 ```
 
 ### The contract in code (for implementers)
