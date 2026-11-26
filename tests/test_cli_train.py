@@ -4,7 +4,6 @@ Integration tests that build a real venv are marked slow; they reuse the
 env cache so only the first run downloads packages.
 """
 
-from pathlib import Path
 
 import pytest
 from click.testing import CliRunner
@@ -72,8 +71,8 @@ def test_train_force_reruns(minimal_project):
                 return parts[-1] if len(parts) >= 2 else None
         return None
 
-    id1 = _run_id(r1.output)
-    id2 = _run_id(r2.output)
+    _run_id(r1.output)
+    _run_id(r2.output)
     # Idempotent without --force: may return the same id on second call
     # With --force: always a new run; we just check both succeeded
     assert r2.exit_code == 0

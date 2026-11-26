@@ -7,12 +7,9 @@ The venv is cached at ~/.mlt/envs/<hash>/ so the first run is slow
 
 from __future__ import annotations
 
-import textwrap
-from pathlib import Path
-
 import pytest
 
-from mlt.core.errors import ContractError, ExecutionError
+from mlt.core.errors import ContractError
 from mlt.core.trainer import train
 from mlt.runstore.store import RunStore
 

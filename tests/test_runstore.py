@@ -1,13 +1,10 @@
 """Tests for RunStore and Manifest."""
 
-import json
-from datetime import datetime, timezone
 
 import pytest
 
 from mlt.runstore.manifest import Manifest
 from mlt.runstore.store import RunStore
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -22,7 +19,9 @@ def _make_manifest(run_id: str = "20260101-000000-aabbcc") -> Manifest:
             "params": {"hash": "ph", "values": {}},
             "schema": {"hash": None, "source": "none"},
             "python": {"requested": "3.10", "source": "default"},
-            "data": {"hash": "dh", "source": "local", "files": {}, "snapshot": None, "frozen": False},
+            "data": {
+                "hash": "dh", "source": "local", "files": {}, "snapshot": None, "frozen": False
+            },
             "deps": {"hash": "deph", "lock": []},
             "seed": 42,
             "seed_source": "default",

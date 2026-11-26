@@ -7,7 +7,6 @@ import pytest
 from mlt.core.contract import Level, check_project, validate_contract
 from mlt.core.errors import ContractError
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -81,7 +80,9 @@ def test_valid_mlmodel_project(tmp_path):
 def test_valid_project_with_params_and_schema(tmp_path):
     params = "n_estimators: 100\nmax_depth: 5\n"
     schema = "features:\n  age: {type: int}\n  income: {type: float}\n"
-    project = _make_project(tmp_path, model_py=_VALID_SKLEARN, params_yaml=params, schema_yaml=schema)
+    project = _make_project(
+        tmp_path, model_py=_VALID_SKLEARN, params_yaml=params, schema_yaml=schema
+    )
     assert _errors(check_project(project)) == []
 
 

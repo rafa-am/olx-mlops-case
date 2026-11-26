@@ -8,7 +8,6 @@ from pathlib import Path
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Skip docker-marked tests when Docker is unavailable
 # ---------------------------------------------------------------------------
@@ -51,7 +50,6 @@ def _force_venv(request, monkeypatch):
 def make_iris_csv(data_dir: Path) -> None:
     """Generate iris.csv from sklearn's dataset."""
     from sklearn.datasets import load_iris
-    import pandas as pd
 
     iris = load_iris(as_frame=True)
     df = iris.frame.copy()

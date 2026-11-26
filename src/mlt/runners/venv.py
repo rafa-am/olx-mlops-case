@@ -22,7 +22,6 @@ from typing import Callable
 
 from mlt.runners.base import Runner
 
-
 _ENVS_DIR = Path.home() / ".mlt" / "envs"
 
 
@@ -60,7 +59,6 @@ class VenvRunner(Runner):
 
     def build_env(self, on_slow_build: Callable[[], None] | None = None) -> str:
         """Create or reuse the venv. Returns ``pip freeze`` output."""
-        from mlt.core.errors import MltEnvironmentError
 
         eh = self.get_env_hash()
         venv_dir = _ENVS_DIR / eh

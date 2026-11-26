@@ -1,6 +1,5 @@
 """Tests for mlt check command, including --deep (venv) and --runner docker (marked)."""
 
-from pathlib import Path
 from unittest.mock import patch
 
 import pytest

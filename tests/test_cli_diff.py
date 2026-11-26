@@ -80,7 +80,7 @@ def test_diff_nonexistent_run_fails(minimal_project):
 def test_diff_latest_alias(minimal_project):
     p = minimal_project
     run_id1 = train(p["project_dir"], data_dir=p["data_dir"], seed=1, force=True)
-    run_id2 = train(p["project_dir"], data_dir=p["data_dir"], seed=2, force=True)
+    train(p["project_dir"], data_dir=p["data_dir"], seed=2, force=True)
     # "latest" resolves to the most recent run; diff latest vs an explicit run_id.
     r = _invoke_from(p["project_dir"], "diff", run_id1, "latest")
     assert r.exit_code == 0

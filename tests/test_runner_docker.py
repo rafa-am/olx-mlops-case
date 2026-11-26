@@ -10,14 +10,12 @@ Run only these tests with:
 from __future__ import annotations
 
 import os
-from pathlib import Path
 
 import pytest
 from click.testing import CliRunner
 
 from mlt.cli.main import cli
 from mlt.core.trainer import train
-
 
 pytestmark = pytest.mark.docker
 
@@ -82,7 +80,6 @@ def test_docker_runner_deep_check_passes(iris_project):
 
 def test_docker_runner_deep_check_fails_bad_model(tmp_path):
     """run_deep_check should return exit code 3 for a contract violation."""
-    import subprocess
     from mlt.runners.docker import DockerRunner
 
     project_dir = tmp_path / "bad"
@@ -119,7 +116,9 @@ def test_train_docker_same_fingerprint_as_venv(iris_project):
     seed = 7
 
     venv_id = train(p["project_dir"], data_dir=p["data_dir"], runner="venv", seed=seed, force=True)
-    docker_id = train(p["project_dir"], data_dir=p["data_dir"], runner="docker", seed=seed, force=True)
+    docker_id = train(
+        p["project_dir"], data_dir=p["data_dir"], runner="docker", seed=seed, force=True
+    )
 
     store = RunStore(p["project_dir"])
     venv_fp = store.get_run(venv_id).fingerprint

@@ -1,11 +1,11 @@
 """Tests for MLModel and SklearnModel."""
 
-import pytest
 from pathlib import Path
+
+import pytest
 
 from mlt.model.base import MLModel
 from mlt.model.sklearn import SklearnModel
-
 
 # ---------------------------------------------------------------------------
 # Minimal concrete implementations used across tests

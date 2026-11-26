@@ -9,7 +9,6 @@ import click
 
 from mlt.core.errors import UsageError
 
-
 _GITIGNORE = """\
 .mlt/
 .venv/

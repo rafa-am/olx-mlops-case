@@ -24,6 +24,7 @@ from __future__ import annotations
 import secrets
 import shutil
 import sys
+from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Mapping
@@ -39,7 +40,6 @@ from mlt.core.fingerprint import (
     build_fingerprint,
     get_git_info,
     hash_code,
-    hash_data_dir,
     hash_deps,
     hash_params,
     hash_schema_file,
@@ -47,8 +47,7 @@ from mlt.core.fingerprint import (
 )
 from mlt.core.seed import resolve_seed
 from mlt.datasources.local import LocalDataSource
-from mlt.runners.venv import VenvRunner
-from mlt.runners.venv import _TIMEOUT_EXIT_CODE
+from mlt.runners.venv import _TIMEOUT_EXIT_CODE, VenvRunner
 from mlt.runstore.manifest import Manifest
 from mlt.runstore.store import RunStore
 

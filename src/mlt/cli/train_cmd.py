@@ -8,7 +8,6 @@ from pathlib import Path
 import click
 
 from mlt.cli.discovery import require_project_dir
-from mlt.core.errors import UsageError
 
 
 @click.command("train")

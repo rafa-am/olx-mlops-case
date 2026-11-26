@@ -5,7 +5,6 @@ from click.testing import CliRunner
 
 from mlt.cli.main import cli
 from mlt.core.trainer import train
-from mlt.runstore.store import RunStore
 
 pytestmark = pytest.mark.slow
 

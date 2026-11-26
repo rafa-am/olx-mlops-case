@@ -21,7 +21,6 @@ from typing import Callable
 
 from mlt.runners.base import Runner
 
-
 _IMAGE_PREFIX = "mlt-env"
 _TIMEOUT_EXIT_CODE = 124
 

@@ -19,7 +19,7 @@ a warning, not an error; ``mlt check --deep`` validates inside the environment.
 """
 
 import ast
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 
@@ -143,7 +143,9 @@ def check_project(project_dir: Path) -> list[CheckResult]:
             )
         )
     else:
-        results.append(CheckResult(level=Level.OK, message="requirements.txt found", file="requirements.txt"))
+        results.append(CheckResult(
+            level=Level.OK, message="requirements.txt found", file="requirements.txt"
+        ))
 
     # -- model.py ---------------------------------------------------------------
     model_py = project_dir / "model.py"

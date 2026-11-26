@@ -21,7 +21,6 @@ from pathlib import Path
 
 from mlt.runstore.manifest import Manifest
 
-
 _DDL = """
 CREATE TABLE IF NOT EXISTS runs (
     run_id          TEXT PRIMARY KEY,

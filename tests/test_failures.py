@@ -15,7 +15,6 @@ from click.testing import CliRunner
 from mlt.cli.main import cli
 from mlt.core.errors import ExecutionError, MltEnvironmentError, MltTimeoutError
 
-
 # ---------------------------------------------------------------------------
 # Set A: Fast CLI exit-code mapping (no venv, mock train())
 # ---------------------------------------------------------------------------

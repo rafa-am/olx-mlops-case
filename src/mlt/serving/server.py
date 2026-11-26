@@ -78,6 +78,7 @@ def main() -> None:
     model = _load_model(run_dir)
 
     import uvicorn
+
     from mlt.serving.app import create_app
     app = create_app(manifest, schema, model)
     uvicorn.run(app, host=args.host, port=args.port)

@@ -1,8 +1,6 @@
 """Tests for mlt init command."""
 
-from pathlib import Path
 
-import pytest
 from click.testing import CliRunner
 
 from mlt.cli.main import cli

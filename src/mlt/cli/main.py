@@ -14,7 +14,7 @@ import sys
 import click
 
 import mlt
-from mlt.core.errors import ExitCode, MltError
+from mlt.core.errors import MltError
 
 
 def _detect_docker() -> str:
@@ -81,13 +81,13 @@ def cli(ctx: click.Context) -> None:
 
 
 # Register subcommands.
-from mlt.cli.init_cmd import init_cmd  # noqa: E402
 from mlt.cli.check_cmd import check_cmd  # noqa: E402
-from mlt.cli.train_cmd import train_cmd  # noqa: E402
-from mlt.cli.runs_cmd import runs_cmd  # noqa: E402
 from mlt.cli.diff_cmd import diff_cmd  # noqa: E402
-from mlt.cli.verify_cmd import verify_cmd  # noqa: E402
+from mlt.cli.init_cmd import init_cmd  # noqa: E402
+from mlt.cli.runs_cmd import runs_cmd  # noqa: E402
 from mlt.cli.serve_cmd import serve_cmd  # noqa: E402
+from mlt.cli.train_cmd import train_cmd  # noqa: E402
+from mlt.cli.verify_cmd import verify_cmd  # noqa: E402
 
 cli.add_command(init_cmd)
 cli.add_command(check_cmd)

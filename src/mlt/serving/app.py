@@ -20,7 +20,6 @@ from fastapi.responses import JSONResponse
 
 from mlt.runstore.manifest import Manifest
 
-
 BATCH_LIMIT = 1000
 
 

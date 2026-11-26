@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Mock model and fixtures
 # ---------------------------------------------------------------------------
@@ -92,8 +91,9 @@ def client(app):
 
 @pytest.fixture()
 def client_no_schema():
-    from mlt.serving.app import create_app
     from fastapi.testclient import TestClient
+
+    from mlt.serving.app import create_app
     return TestClient(create_app(_make_manifest(), None, _ConstantModel()))
 
 
@@ -266,8 +266,9 @@ def test_predict_multiple_records_one_invalid(client):
 
 def test_predict_model_exception_returns_500():
     """Exception inside predict → 500 without a stack trace in the body."""
-    from mlt.serving.app import create_app
     from fastapi.testclient import TestClient
+
+    from mlt.serving.app import create_app
 
     client = TestClient(create_app(_make_manifest(), None, _ErrorModel()))
     r = client.post("/predict", json={"inputs": [{"x": 1}]})

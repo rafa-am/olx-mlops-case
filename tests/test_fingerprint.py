@@ -1,8 +1,6 @@
 """Tests for fingerprint and hash functions."""
 
-from pathlib import Path
 
-import pytest
 
 from mlt.core.fingerprint import (
     build_fingerprint,
@@ -12,7 +10,6 @@ from mlt.core.fingerprint import (
     hash_params,
     hash_schema_file,
 )
-
 
 # ---------------------------------------------------------------------------
 # hash_code

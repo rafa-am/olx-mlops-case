@@ -16,7 +16,6 @@ from mlt.cli.discovery import find_project_dir
 from mlt.core.errors import MltEnvironmentError, OperationRefusedError
 from mlt.runstore.store import RunStore
 
-
 _HEALTH_TIMEOUT = 60  # seconds to wait for /health → 200
 
 
