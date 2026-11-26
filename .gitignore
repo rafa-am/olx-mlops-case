@@ -8,3 +8,6 @@ dist/
 build/
 .pytest_cache/
 .ruff_cache/
+web-ui-handoff.md
+docs/webui*snap*
+.coverage
