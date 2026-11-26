@@ -430,3 +430,5 @@ flowchart LR
   S3 -->|read-only model| SERVE
   DS -->|POST /predict| SERVE
 ```
+
+*See `docs/architecture.md` for detailed component diagrams, the full training and serving flows, and the MVP → AWS evolution mapping.*
