@@ -104,10 +104,11 @@ class Model(SklearnModel):
         # Override if your model requires a different serialisation format.
         super().save(path)
 
-    def load(self, path):
+    @classmethod
+    def load(cls, path):
         # path is a pathlib.Path; SklearnModel loads from path/model.joblib.
         # Override if you customised save().
-        super().load(path)
+        return super().load(path)
 ```
 
 ### The contract in code (for implementers)
