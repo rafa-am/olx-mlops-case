@@ -1,86 +1,87 @@
-# Design do mlt
+# mlt — Model Lifecycle Toolkit: Design
 
-Especificação do MVP, consolidada a partir das decisões de design. Complementa o `DECISIONS.md` (que registra o porquê) com o quê construir.
+Specification of the MVP, consolidated from the design decisions. Complements `DECISIONS.md` (which records the why) with the what to build.
 
-## 1. Objetivo
+## 1. Goal
 
-Uma ferramenta para cientistas de dados que escrevem apenas código Python. Do treino reprodutível e isolado até uma API REST de inferência, com artefatos e métricas associados à execução que os gerou.
+A tool for data scientists who write only Python code. From reproducible, isolated training to a REST inference API, with artifacts and metrics associated with the execution that generated them.
 
-O cientista fornece Python, dependências e dados. Todo o resto é responsabilidade da ferramenta.
+The scientist provides Python, dependencies, and data. Everything else is the tool's responsibility.
 
-## 2. Princípios
+## 2. Principles
 
-- A CLI é uma camada fina sobre `mlt.core`. Toda a lógica vive no núcleo.
-- Três interfaces com implementação local no MVP e caminho de evolução: `DataSource`, `Runner`, `RunStore`.
-- O run é imutável e autocontido: tudo que o identifica está no manifesto.
-- O treino roda sem rede, com dados somente leitura.
-- Falhar cedo e com mensagem clara: erro de contrato é detectado antes do treino.
-- Não prometer o que não se garante: reprodutibilidade é identificação mais verificação, e isso é dito.
+- The CLI is a thin layer over `mlt.core`. All logic lives in the core.
+- Three interfaces with local implementation in the MVP and a path of evolution: `DataSource`, `Runner`, `RunStore`.
+- The run is immutable and self-contained: everything that identifies it is in the manifest.
+- Training runs without network, with read-only data.
+- Fail early and with a clear message: contract errors are detected before training.
+- Do not promise what cannot be guaranteed: reproducibility is identification plus verification, and this is stated.
 
-## 3. Estrutura do repositório
+## 3. Repository structure
 
 ```
-README.md                  quickstart do cientista (6 passos) e guia do cientista (uma página)
-DECISIONS.md  AI_USAGE.md  na raiz, como pedido no enunciado
-CLAUDE.md                  contexto para o Claude Code
+README.md                  scientist's quickstart (6 steps) and scientist's guide (one page)
+DECISIONS.md  AI_USAGE.md  at the root, as requested in the problem statement
+CLAUDE.md                  context for Claude Code
 pyproject.toml
 src/mlt/
-  cli/                     comandos (camada fina)
-  core/                    treino, serving, runs, manifesto, erros e códigos de saída
-  model/                   MLModel (núcleo, SEM dependências externas) e conveniências por framework (sklearn.py)
+  cli/                     commands (thin layer)
+  core/                    training, serving, runs, manifest, errors, and exit codes
+  model/                   MLModel (core, NO external dependencies) and framework conveniences (sklearn.py)
   runners/                 Runner: docker, venv
   datasources/             DataSource: local
-  runstore/                RunStore: arquivos + SQLite
-  serving/                 servidor FastAPI genérico
-  templates/iris/          projeto exemplo scikit-learn, com `.python-version`, `params.yaml` e `.gitignore` (única cópia; usado por `init` e pelos testes)
-  templates/blank/         esqueleto de MLModel com TODO, para outros frameworks
+  runstore/                RunStore: files + SQLite
+  serving/                 generic FastAPI server
+  templates/iris/          scikit-learn example project, with `.python-version`, `params.yaml`, and `.gitignore` (single copy; used by `init` and by tests)
+  templates/blank/         MLModel skeleton with TODO, for other frameworks
 tests/
 docs/
-  design.md                este arquivo
-  architecture.md          diagramas Mermaid
+  design.md                this file
+  architecture.md          Mermaid diagrams
 ```
 
-O núcleo de `model/` (`MLModel`) não pode importar nada fora da biblioteca padrão nem trazer padrões ligados a um framework. Conveniências como `SklearnModel` ficam em módulos próprios e importam joblib e pandas de forma preguiçosa. Isso deixa a evolução para um SDK separado mecânica.
+The `model/` core (`MLModel`) must not import anything outside the standard library or bring patterns tied to a framework. Conveniences like `SklearnModel` live in their own modules and import joblib and pandas lazily. This makes evolution to a separate SDK mechanical.
 
-## 4. Contrato do cientista
+## 4. Scientist's contract
 
-Uma pasta de projeto (reconhecida pela presença de `model.py`):
+A project folder (recognized by the presence of `model.py`):
 
-| Arquivo | Obrigatório | Papel |
+| File | Required | Role |
 |---|---|---|
-| `requirements.txt` | sim | dependências; versões fixadas são recomendadas (aviso se não) |
-| `model.py` | sim | exatamente uma subclasse de `MLModel` (ou de uma conveniência, como `SklearnModel`) |
-| `params.yaml` | não | se existir, vira o argumento `params` do `fit` |
-| `schema.yaml` | não | features de entrada; sem ele, é inferido |
-| `.python-version` | não | uma linha, por exemplo `3.12`; versão do Python do treino. O `requirements.txt` não consegue declará-la |
-| dados | externos | pasta local: `<projeto>/data/` por padrão, ou `--data <pasta>` |
+| `requirements.txt` | yes | dependencies; pinned versions are recommended (warning if not) |
+| `model.py` | yes | exactly one subclass of `MLModel` (or a convenience like `SklearnModel`) |
+| `params.yaml` | no | if it exists, becomes the `params` argument of `fit` |
+| `schema.yaml` | no | input features; without it, inferred |
+| `.python-version` | no | one line, e.g. `3.12`; Python version for training. `requirements.txt` cannot declare it |
+| data | external | local folder: `<project>/data/` by default, or `--data <folder>` |
 
-### Guia do cientista (conteúdo mínimo, parte do README)
+### Scientist's guide (minimum content, part of the README)
 
-Uma página que diz ao cientista o que se espera dele:
+One page that tells the scientist what is expected of them:
 
-1. **Escolha da classe base:** scikit-learn ou compatível, `SklearnModel` (só o `fit`, atribuindo `self.model`); qualquer outro framework, `MLModel` (os quatro métodos). `mlt init --template iris` ou `--template blank` dá o ponto de partida.
-2. **Construção:** a classe é instanciada sem argumentos. A ferramenta atribui `self.seed` antes do `fit`. Tudo que varia vem por `params`.
-3. **`fit`:** lê os arquivos de `data_dir` (somente leitura), usa `params` e `self.seed`, e devolve só números nas métricas. Tudo que ele imprime vai para o `train.log`. Para arquivos temporários, use o `tempfile`.
-4. **`predict`:** recebe uma lista de dicts com os mesmos nomes de coluna do treino e devolve uma lista do mesmo tamanho. O pré-processamento precisa estar no `self.model` (por exemplo, um Pipeline) ou no `predict`.
-5. **`save` e `load`:** o `path` é um diretório local criado pela ferramenta; o modelo escreve nele os arquivos que quiser. A `SklearnModel` já faz isso com joblib.
-6. **`requirements.txt`:** é tudo o que existe no ambiente. Tudo que o `model.py` importa precisa estar lá, com versão fixada.
-7. **Dados:** em `<projeto>/data/`, ou indicados por `--data`.
-8. **Schema:** a inferência só funciona se o `fit` treinar com um DataFrame de colunas nomeadas; senão, declare o `schema.yaml`.
-9. **Python:** a versão vem de `--python`, do `.python-version` (uma linha, opcional) ou do padrão; o `requirements.txt` não a declara.
-10. **Limites do `check`:** ele valida o contrato sem treinar. Erros dentro do `predict` só aparecem ao servir.
+1. **Choosing the base class:** scikit-learn or compatible, `SklearnModel` (just `fit`, assigning `self.model`); any other framework, `MLModel` (all four methods). `mlt init --template iris` or `--template blank` gives the starting point.
+2. **Construction:** the class is instantiated without arguments. The tool assigns `self.seed` before `fit`. Everything that varies comes through `params`.
+3. **`fit`:** reads files from `data_dir` (read-only), uses `params` and `self.seed`, and returns only numbers in the metrics. Everything it prints goes to `train.log`. For temporary files, use `tempfile`.
+4. **`predict`:** receives a list of dicts with the same column names as during training and returns a list of the same size. Preprocessing must be in `self.model` (e.g., a Pipeline) or in `predict`.
+5. **`save` and `load`:** `path` is a local directory created by the tool; the model writes whatever files it wants there. `SklearnModel` already does this with joblib.
+6. **`requirements.txt`:** it is everything that exists in the environment. Everything that `model.py` imports must be there, with pinned versions.
+7. **Data:** in `<project>/data/`, or indicated by `--data`.
+8. **Schema:** inference only works if `fit` trains with a DataFrame with named columns; otherwise, declare `schema.yaml`.
+9. **Python:** the version comes from `--python`, from `.python-version` (one line, optional), or from the default; `requirements.txt` does not declare it.
+10. **`check` limits:** it validates the contract without training. Errors inside `predict` only appear when serving.
 
-### Exemplo mínimo (é o `model.py` do template `iris`)
+### Minimal example (this is the `model.py` of the `iris` template)
 
 ```python
-import pandas as pd
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split
 from mlt.model.sklearn import SklearnModel
 
 
 class Model(SklearnModel):
     def fit(self, data_dir, params):
+        import pandas as pd
+        from sklearn.ensemble import RandomForestClassifier
+        from sklearn.model_selection import train_test_split
+
         df = pd.read_csv(data_dir / "iris.csv")
         X, y = df.drop(columns="species"), df["species"]
         X_tr, X_te, y_tr, y_te = train_test_split(
@@ -92,161 +93,176 @@ class Model(SklearnModel):
             random_state=self.seed,
         ).fit(X_tr, y_tr)
         return {"accuracy": float(self.model.score(X_te, y_te))}
+
+    def predict(self, inputs):
+        # SklearnModel reorders columns to match training order and calls
+        # self.model.predict(). Override for custom pre/post-processing.
+        return super().predict(inputs)
+
+    def save(self, path):
+        # path is a pathlib.Path; SklearnModel saves to path/model.joblib.
+        # Override if your model requires a different serialisation format.
+        super().save(path)
+
+    def load(self, path):
+        # path is a pathlib.Path; SklearnModel loads from path/model.joblib.
+        # Override if you customised save().
+        super().load(path)
 ```
 
-### O contrato em código (para quem implementa)
+### The contract in code (for implementers)
 
 ```python
-class MLModel(ABC):                             # núcleo, agnóstico de framework
-    seed: int                                   # atribuída pela ferramenta antes do fit
+class MLModel(ABC):                             # core, framework-agnostic
+    seed: int                                   # assigned by the tool before fit
 
     @abstractmethod
     def fit(self, data_dir: Path, params: dict) -> dict[str, float]:
-        """Treina e devolve métricas (nome -> número). O modelo fica em self."""
+        """Trains and returns metrics (name -> number). The model stays in self."""
 
     @abstractmethod
     def predict(self, inputs: list[dict]) -> list:
-        """Uma predição por registro, na mesma ordem. Forma livre, serializável em JSON."""
+        """One prediction per record, in the same order. Free-form, JSON-serializable."""
 
     @abstractmethod
     def save(self, path: Path) -> None:
-        """path: diretório local criado pela ferramenta."""
+        """path: local directory created by the tool."""
 
     @classmethod
     @abstractmethod
     def load(cls, path: Path) -> "MLModel":
-        """path: diretório local com o que o save escreveu."""
+        """path: local directory with what save wrote."""
 
 
-class SklearnModel(MLModel):                    # conveniência opcional
-    # O cientista só escreve o fit e atribui self.model.
-    # predict padrão: registros -> tabela (ordem das features do schema) -> self.model.predict
-    # save/load padrão: joblib, dentro do diretório
+class SklearnModel(MLModel):                    # optional convenience
+    # The scientist only writes fit and assigns self.model.
+    # default predict: records -> table (feature order from schema) -> self.model.predict
+    # default save/load: joblib, inside the directory
 ```
 
-O núcleo exige `fit`, `predict`, `save` e `load`, todos abstratos, para não acoplar a ferramenta a um tipo de artefato (um `predict` padrão baseado em Pipeline do scikit-learn dificultaria, por exemplo, modelos PySpark). A `SklearnModel` dá a ergonomia do scikit-learn sem impô-la. Uma `SparkModel` futura só precisa implementar `save` e `load` no formato nativo.
+The core requires `fit`, `predict`, `save`, and `load`, all abstract, to avoid coupling the tool to one artifact type (a default `predict` based on scikit-learn Pipeline would make PySpark models difficult, for example). `SklearnModel` provides scikit-learn ergonomics without imposing them. A future `SparkModel` only needs to implement `save` and `load` in the native format.
 
-`save` e `load` operam sobre um diretório local. Quem transporta o pacote entre o disco e um registry remoto é o `RunStore`; o modelo nunca fala com o registry. Isso permite trocar o `RunStore` sem mudar o contrato do cientista.
+`save` and `load` operate on a local directory. Who transports the package between disk and a remote registry is `RunStore`; the model never talks to the registry. This allows swapping `RunStore` without changing the scientist's contract.
 
-Na `SklearnModel`, se `self.model` não existir ou não tiver `predict` depois do `fit`, o run termina como `failed` (código 4) com mensagem clara. É a única violação de contrato achada após o treino, e só ocorre na classe de conveniência.
+In `SklearnModel`, if `self.model` does not exist or does not have `predict` after `fit`, the run ends as `failed` (code 4) with a clear message. This is the only contract violation found after training, and only occurs in the convenience class.
 
-Regra de evolução da assinatura do `fit` (e, por extensão, de `save` e `load`): a ferramenta pode passar apenas os parâmetros que o método declara (como as fixtures do pytest). Isso permitiria, por exemplo, `fit(self, data_uri, params, spark)` em modelos Spark, ou uma URI em vez de um diretório local para modelos muito grandes, sem quebrar os atuais. Não é implementado no MVP.
+Evolution rule for the `fit` signature (and, by extension, `save` and `load`): the tool can pass only the parameters the method declares (like pytest fixtures). This would allow, for example, `fit(self, data_uri, params, spark)` in Spark models, or a URI instead of a local directory for very large models, without breaking current ones. Not implemented in the MVP.
 
 `schema.yaml`:
 
 ```yaml
 features:
-  idade: {type: int, min: 0, max: 120}
-  renda: {type: float, required: true}
-  sexo:  {type: str, allowed: [F, M]}
+  age:    {type: int, min: 0, max: 120}
+  income: {type: float, required: true}
+  sex:    {type: str, allowed: [F, M]}
 ```
 
-Interpretação de "somente código Python": sem infraestrutura nem servidor, e não sem convenção. O obrigatório é `requirements.txt` e `model.py`; os YAMLs são opcionais. O atrito de herdar de `MLModel` é mitigado pelo `mlt init`, e por o núcleo de `model/` não ter dependências externas, o que mantém a classe testável fora da ferramenta.
+Interpretation of "only Python code": no infrastructure or server, not no convention. The required items are `requirements.txt` and `model.py`; the YAMLs are optional. The friction of inheriting from `MLModel` is mitigated by `mlt init`, and by the `model/` core having no external dependencies, which keeps the class testable outside the tool.
 
-Schema inferido: de `feature_names_in_` do modelo treinado (sklearn com DataFrame). Sem nomes, o schema fica sem estrutura (dict livre) e a ferramenta avisa no `check` e no `/schema`.
+Inferred schema: from `feature_names_in_` of the trained model (sklearn with DataFrame). Without names, the schema has no structure (free dict) and the tool warns in `check` and in `/schema`.
 
 ## 5. CLI
 
-**Clareza para o cientista:** o `train` imprime no início o que está valendo e de onde veio (`python 3.12 (origem: .python-version)`, `runner docker`, `seed 42 (origem: padrão)`); o `check` mostra o mesmo; o `init` gera `.python-version` e `params.yaml` comentados; o README traz uma tabela "o que eu controlo" (arquivo ou flag, efeito, padrão).
+**Clarity for the scientist:** `train` prints at the start what is in effect and where it came from (`python 3.12 (source: .python-version)`, `runner docker`, `seed 42 (source: default)`); `check` shows the same; `init` generates commented `.python-version` and `params.yaml`; the README includes a "what I control" table (file or flag, effect, default).
 
-**Instalação:** `pip install .` em um venv do host, Python `>=3.10` (declarado no `pyproject.toml`). O pacote traz só o `mlt` e seu runtime (CLI, YAML, FastAPI, uvicorn); as dependências do modelo vêm do `requirements.txt` do projeto, dentro do ambiente isolado. Pré-requisitos do README: Docker em execução (opcional; sem ele, `--runner venv`) e rede no primeiro build.
+**Installation:** `pip install .` in a host venv, Python `>=3.10` (declared in `pyproject.toml`). The package brings only `mlt` and its runtime (CLI, YAML, FastAPI, uvicorn); model dependencies come from the project's `requirements.txt`, inside the isolated environment. README prerequisites: Docker running (optional; without it, `--runner venv`) and network on the first build.
 
-| Comando | Função |
+| Command | Function |
 |---|---|
-| `mlt --version` | mostra a versão do `mlt`, o Python que executa o `mlt` e o que foi detectado (`docker: disponível` ou `indisponível`, daemon em execução) |
-| `mlt init <pasta> --template iris` ou `--template blank` | cria um projeto novo a partir do template (`iris`: exemplo scikit-learn; `blank`: esqueleto de `MLModel` com TODO, para outros frameworks). Roda de qualquer pasta. Recusa pasta existente e não vazia (saída 2), sem sobrescrever. Inclui um `.gitignore` com `.mlt/` (sem `git init`) e imprime os próximos passos (`cd`, `check`, `train`). `--force` para pasta existente é P2 |
-| `mlt check [pasta]` | valida o contrato de forma estática, sem treinar (lê a raiz); `--deep` constrói o ambiente e valida dentro dele |
-| `mlt train [pasta]` | treina e grava um run |
-| `mlt runs list` / `mlt runs show <run_id>` | lista e detalha runs (`--json` opcional) |
-| `mlt diff <a> <b>` | o que mudou entre dois runs |
-| `mlt verify <run_id>` | retreina e compara; recusa se os dados mudaram |
-| `mlt serve <run_id>` (ou `latest`) | sobe a API (`--detach`, `--port`, `--host`) |
-| `mlt ps` / `mlt stop <run_id>` / `mlt logs <run_id>` | gerência dos serviços |
+| `mlt --version` | shows the `mlt` version, the Python running `mlt`, and what was detected (`docker: available` or `unavailable`, daemon running) |
+| `mlt init <folder> --template iris` | creates a new project from the iris template (scikit-learn example). Runs from any folder. Refuses an existing non-empty folder (exit 2), without overwriting. Includes a `.gitignore` with `.mlt/` (without `git init`) and prints the next steps (`cd`, `check`, `train`). (`--template blank` and `--force` are P2.) |
+| `mlt check [folder]` | validates the contract statically, without training (reads the root); `--deep` builds the environment and validates inside it |
+| `mlt train [folder]` | trains and records a run |
+| `mlt runs list` / `mlt runs show <run_id>` | lists and details runs (`--json` optional) |
+| `mlt diff <a> <b>` | what changed between two runs |
+| `mlt verify <run_id>` | retrains and compares; refuses if data changed |
+| `mlt serve <run_id>` (or `latest`) | starts the API (`--detach`, `--port`, `--host`) |
+| `mlt ps` / `mlt stop <run_id>` / `mlt logs <run_id>` | service management |
 
-Flags de `train`: `--data <pasta>` (padrão `<projeto>/data/`), `--runner auto|docker|venv`, `--python 3.12` (precedência: flag, depois `.python-version`, depois o padrão), `--seed N`, `--timeout 600`, `--snapshot-data`, `--rebuild`, `--force`, `--verbose`.
+Flags for `train`: `--data <folder>` (default `<project>/data/`), `--runner auto|docker|venv`, `--python 3.12` (precedence: flag, then `.python-version`, then default), `--seed N`, `--timeout 600`, `--force`, `--verbose`. (`--snapshot-data` and `--rebuild` are P2.)
 
-O `check` é **estático**: lê o `model.py` sem importá-lo (as dependências do cientista só existem no ambiente isolado, não no host). Ele valida: subclasse única, métodos obrigatórios definidos, `params.yaml` e `schema.yaml` válidos, `requirements.txt` presente e seed válida. A validação profunda (importar, instanciar e conferir os métodos) roda dentro do ambiente, sem rede, no `train` e no `check --deep`.
+`check` is **static**: reads `model.py` without importing it (the scientist's dependencies only exist in the isolated environment, not on the host). It validates: unique subclass, required methods defined, valid `params.yaml` and `schema.yaml`, `requirements.txt` present, and valid seed. Deep validation (import, instantiate, and check the methods) runs inside the environment, without network, in `train` and in `check --deep`.
 
-**Detalhes do `check`:**
-- **Dados:** o `check` não olha a pasta `data/` diretamente; chama `DataSource.check()`. No MVP (local) confere que a pasta (`<projeto>/data/` ou `--data`) existe e não está vazia (erro, saída 3). Num lakehouse futuro seria uma consulta de metadados (tabela e snapshot resolvem, há permissão), sem baixar nada. No treino, o `DataSource` materializa os dados em um `data_dir` local somente leitura, em cache fora do projeto e fora da imagem.
-- **Herança:** a subclasse é reconhecida pelo nome (`MLModel`, `SklearnModel`) e por imports com alias simples. Herança indireta (classe base do próprio cientista) não é resolvida: o `check` avisa "não foi possível confirmar, use `--deep`" em vez de falhar.
-- **Saída:** uma linha por verificação (`ok`, `aviso`, `erro`), com arquivo e linha quando possível e a próxima ação sugerida. Termina com 0 (sem erros) ou 3.
+**`check` details:**
+- **Data:** `check` does not look at the `data/` folder directly; it calls `DataSource.check()`. In the MVP (local) it checks that the folder (`<project>/data/` or `--data`) exists and is not empty (error, exit 3). In a future lakehouse it would be a metadata query (table and snapshot resolve, permission exists), without downloading anything. In training, the `DataSource` materializes the data into a local read-only `data_dir`, cached outside the project and outside the image.
+- **Inheritance:** the subclass is recognized by name (`MLModel`, `SklearnModel`) and by imports with simple aliases. Indirect inheritance (scientist's own base class) is not resolved: `check` warns "could not confirm, use `--deep`" instead of failing.
+- **Output:** one line per check (`ok`, `warning`, `error`), with file and line when possible and the suggested next action. Ends with 0 (no errors) or 3.
 
-Descoberta do projeto: `train` e `check` recebem o caminho (padrão `.`) e exigem `model.py`. Os demais comandos sobem diretórios a partir do diretório atual até achar `model.py` ou `.mlt/`; assim `mlt runs list` antes do primeiro treino responde "nenhum run ainda" (saída 0). Precedência: flag, depois `MLT_HOME`, depois descoberta automática.
+Project discovery: `train` and `check` receive the path (default `.`) and require `model.py`. Other commands walk up directories from the current directory until finding `model.py` or `.mlt/`; so `mlt runs list` before the first training responds "no runs yet" (exit 0). Precedence: flag, then `MLT_HOME`, then automatic discovery.
 
-**Comportamento de `runs list` e `runs show`:**
-- **`list`:** uma linha por run, do mais recente ao mais antigo: `run_id`, status (destacado se `failed`), quando, duração, até 3 métricas (na ordem em que o `fit` as devolveu) e os 8 primeiros caracteres do fingerprint. Limita a 20 runs; `--all` mostra todos. Não há "métrica principal" no contrato. `--status succeeded|failed` filtra (P2).
-- **`show`:** responde "o que identifica este run?" em seções: identidade (`run_id`, status, datas, duração); entradas (código com commit e se estava sujo, params com valores, dados com hash e número de arquivos, seed e origem, Python e origem); ambiente (runner, isolamento, digest); resultados (todas as métricas, caminho do modelo); e, se falhou, o erro e o caminho do `train.log`. `--json` imprime o manifesto inteiro.
-- **Referência a runs:** todos os comandos que recebem `run_id` aceitam `latest` e um prefixo único do `run_id`, como no Git. `run_id` inexistente sai com 7; prefixo ambíguo sai com 7 e lista as opções.
+**Behavior of `runs list` and `runs show`:**
+- **`list`:** one line per run, from newest to oldest: `run_id`, status (highlighted if `failed`), when, duration, up to 3 metrics (in the order `fit` returned them), and the first 8 characters of the fingerprint. Limited to 20 runs; `--all` shows all. There is no "primary metric" in the contract. `--status succeeded|failed` filters (P2).
+- **`show`:** answers "what identifies this run?" in sections: identity (`run_id`, status, dates, duration); inputs (code with commit and whether dirty, params with values, data with hash and file count, seed and origin, Python and origin); environment (runner, isolation, digest); results (all metrics, model path); and, if it failed, the error and the `train.log` path. `--json` prints the full manifest.
+- **Run reference:** all commands that receive a `run_id` accept `latest` and a unique prefix of the `run_id`, like in Git. A nonexistent `run_id` exits with 7; an ambiguous prefix exits with 7 and lists the options.
 
-**Comportamento de `diff` e `verify`:**
-- **`diff <a> <b>`:** não treina; lê os dois manifestos. Começa dizendo se o fingerprint difere e por quais componentes (`fingerprint: diferente (params)`). Mostra só o que difere, agrupado: params (`n_estimators: 100 → 300`), código (hash e commit), dados, seed, Python e dependências, ambiente (runner e isolamento) e métricas lado a lado com a diferença. Sem diferenças nas entradas: "entradas idênticas". `--json` dá a saída estruturada.
-- **`verify <run_id>` (versão mínima, P1):** responde "se eu repetir este run, obtenho o mesmo resultado?". Não olha a raiz do projeto: retreina a partir do que o run guardou (`code/`, `params.yaml`, `schema.yaml`, seed e Python), com o mesmo runner do original (avisa se não estiver disponível; `--runner` troca). Cria um run novo com `verification_of: <run_id>` no manifesto, marcado no `runs list`, o que mantém os runs imutáveis e a prova auditável.
-- **Veredito:** compara o fingerprint (deve ser igual) e as métricas, uma a uma, com tolerância relativa fixa de 1e-6. Métrica nova ou ausente conta como divergência. Imprime original, nova e diferença por métrica e termina com `reproduzido` (saída 0) ou `divergiu` (saída 4, para uso em CI). O hash do artefato do modelo não entra no veredito.
-- **Dados alterados:** sem snapshot, recusa com saída 8 e aponta o `diff` e o `--snapshot-data`. Com snapshot (P2), usa o snapshot.
-- **O que prova:** que, com as mesmas entradas identificadas, o código produz métricas equivalentes (detecta seed não aplicada e não determinismo). Não prova conteúdo igual dos dados sem snapshot, nem reprodução bit a bit entre máquinas.
-- **Fora da versão mínima:** `--tolerance`, comparação do hash do artefato. **Se faltar tempo:** cortar o comando e mostrar o mesmo argumento com o teste de integração "treina duas vezes e compara", já previsto nos testes.
+**Behavior of `diff` and `verify`:**
+- **`diff <a> <b>`:** does not train; reads the two manifests. Starts by saying whether the fingerprint differs and by which components (`fingerprint: different (params)`). Shows only what differs, grouped: params (`n_estimators: 100 → 300`), code (hash and commit), data, seed, Python and dependencies, environment (runner and isolation), and metrics side by side with the difference. No differences in inputs: "identical inputs". `--json` gives structured output.
+- **`verify <run_id>` (minimum version, P1):** answers "if I repeat this run, do I get the same result?". Does not look at the project root: retrains from what the run saved (`code/`, `params.yaml`, `schema.yaml`, seed, and Python), with the same runner as the original (warns if not available; `--runner` overrides). Creates a new run with `verification_of: <run_id>` in the manifest, marked in `runs list`, which keeps runs immutable and the proof auditable.
+- **Verdict:** compares the fingerprint (must be equal) and the metrics, one by one, with a fixed relative tolerance of 1e-6. A new or missing metric counts as divergence. Prints original, new, and difference per metric and ends with `reproduced` (exit 0) or `diverged` (exit 4, for use in CI). The model artifact hash does not enter the verdict.
+- **Altered data:** without a snapshot, refuses with exit 8 and points to `diff` and `--snapshot-data`. With snapshot (P2), uses the snapshot.
+- **What it proves:** that, with the same identified inputs, the code produces equivalent metrics (detects unapplied seed and non-determinism). Does not prove equal data content without a snapshot, nor bit-for-bit reproduction across machines.
+- **Outside the minimum version:** `--tolerance`, artifact hash comparison. **If time is short:** cut the command and show the same argument with the integration test "trains twice and compares", already planned in the tests.
 
-## 6. Fluxo de treino
+## 6. Training flow
 
-1. Validar o contrato de forma estática, sem importar o `model.py` (subclasse única, métodos obrigatórios, `params.yaml`, `schema.yaml`, seed). Erro aqui não cria run.
-2. Calcular os hashes de entrada e o fingerprint. Se existir run `succeeded` idêntico, não treina e aponta o run (`--force` repete).
-3. Resolver o ambiente (imagem Docker ou venv), com lock por hash para builds concorrentes. Em seguida, a validação profunda dentro do ambiente, sem rede (importa e instancia a classe e confere os métodos). Erro aqui também sai com código 3 e não cria run.
-4. Criar o run (`status: running`, manifesto parcial, linha no índice).
-5. Executar o `fit` sem rede, com `data_dir` somente leitura, seed injetada, com timeout.
-6. Salvar modelo, `metrics.json`, `params.yaml` e `schema.yaml` efetivos, `code/` e `train.log`; gravar o manifesto final de forma atômica; atualizar o índice.
+1. Validate the contract statically, without importing `model.py` (unique subclass, required methods, `params.yaml`, `schema.yaml`, seed). Error here does not create a run.
+2. Calculate input hashes and the fingerprint. If an identical `succeeded` run exists, do not train and point to the run (`--force` repeats).
+3. Resolve the environment (Docker image or venv), with lock by hash for concurrent builds. Then, deep validation inside the environment, without network (import and instantiate the class and check the methods). Error here also exits with code 3 and does not create a run.
+4. Create the run (`status: running`, partial manifest, row in the index).
+5. Execute `fit` without network, with read-only `data_dir`, injected seed, with timeout.
+6. Save model, `metrics.json`, effective `params.yaml` and `schema.yaml`, `code/`, and `train.log`; write the final manifest atomically; update the index.
 
-**Comportamento do `train` na CLI:**
-- **Saída:** mostra as etapas (ambiente, validação, treino) e a duração. O resumo final traz `run_id`, status, métricas e a próxima ação (`mlt runs show <run_id>`, `mlt serve <run_id>`). O log do `fit` vai para o `train.log`; com `--verbose` também aparece no terminal.
-- **Build lento:** na primeira vez, imprime "construindo imagem (primeira vez, pode levar alguns minutos)"; com `--verbose`, mostra o log do build.
-- **Run idêntico:** não treina, aponta o run existente e sai com 0. `--force` cria um novo run.
-- **Ctrl+C:** para o container, marca o run como `failed` com `error: interrupted` e sai com 130. O run fica consistente mesmo sem a reconciliação (P2).
-- **Falha de build** (por exemplo, dependência inexistente): saída 6, sem criar run, com o trecho final do log do `pip` na mensagem.
+**`train` behavior in the CLI:**
+- **Output:** shows the steps (environment, validation, training) and duration. The final summary includes `run_id`, status, metrics, and the next action (`mlt runs show <run_id>`, `mlt serve <run_id>`). The `fit` log goes to `train.log`; with `--verbose` it also appears in the terminal.
+- **Slow build:** the first time, prints "building image (first time, may take a few minutes)"; with `--verbose`, shows the build log.
+- **Identical run:** does not train, points to the existing run, and exits with 0. `--force` creates a new run.
+- **Ctrl+C:** stops the container, marks the run as `failed` with `error: interrupted`, and exits with 130. The run remains consistent even without reconciliation (P2).
+- **Build failure** (e.g., nonexistent dependency): exit 6, without creating a run, with the final portion of the `pip` log in the message.
 
-## 7. Ambiente e isolamento
+## 7. Environment and isolation
 
-- **Docker (principal):** imagem `mlt-env:<hash>`, com hash de `requirements.txt` normalizado, versão do Python e versão do `mlt`. Base `python:<versão>-slim`, com a versão vinda de `--python`, do `.python-version` ou do padrão `3.12`. O build tem rede; o treino não.
-- **venv (alternativa):** Python que executa o `mlt` (ver abaixo), cache em `~/.mlt/envs/<hash>`. Não isola rede nem sistema; o manifesto registra o nível de isolamento.
-- **Python do venv:** é o interpretador que executa o `mlt` (`sys.executable`), criado com `sys.executable -m venv`, sem procurar outras versões no `PATH`. Se `--python` ou o `.python-version` pedirem outra versão, sai com 6 explicando: usar Docker ou instalar o `mlt` em um venv com essa versão. Sem declaração, usa o interpretador do `mlt`. Procurar outros Pythons no sistema é evolução.
-- **Versão declarada:** a versão major.minor do Python entra no componente `deps` do fingerprint. O manifesto grava a versão completa (`3.12.4`) em `environment` e a versão pedida com a origem (`flag`, `arquivo` ou `padrão`).
-- **Runner fora do fingerprint:** o runner fica em `environment` (informativo), e o `diff` mostra a diferença. O mesmo projeto, treinado em Docker e em venv com o mesmo Python, tem o mesmo fingerprint, e o `verify` pode comparar os dois.
-- **Sem Docker:** `--runner auto` cai para o venv e avisa que o isolamento é menor (`isolation: none` no manifesto). `--runner docker` explícito sem Docker sai com 6, sem criar run. `serve`, `ps`, `stop` e `logs` usam o PID em vez do container.
-- Após o build, `pip freeze` vira o lock no manifesto.
-- O `mlt` é instalado no mesmo ambiente das dependências do cientista. Conflito de versões aparece como erro do resolvedor. Isolar o runtime é evolução.
-- O ambiente do host não é herdado pelo container; a seed é passada explicitamente.
-- **Como o `mlt` entra na imagem:** o runner copia o pacote `mlt` instalado (só o runtime de treino/serving) para o contexto de build e o instala na imagem. Em instalação editável (`pip install -e`), copia-se o código-fonte atual. A versão do `mlt` não muda durante o desenvolvimento, então o hash do ambiente usa a versão **e** um hash do código-fonte do `mlt`; `--rebuild` força a reconstrução.
-- **Rede:** o build precisa de rede uma vez (instalar pacotes e baixar a base). Depois disso o cache permite treinar offline; o README diz isso.
-- **Montagens do container:** projeto e `data/` somente leitura; diretório de saída do run gravável; `tmpfs` para temporários; sem rede no treino; usuário não root.
+- **Docker (primary):** image `mlt-env:<hash>`, with hash of normalized `requirements.txt`, Python version, and `mlt` version. Base `python:<version>-slim`, with the version coming from `--python`, `.python-version`, or the default `3.12`. The build has network; training does not.
+- **venv (alternative):** Python that runs `mlt` (see below), cache in `~/.mlt/envs/<hash>`. Does not isolate network or system; the manifest records the isolation level.
+- **venv Python:** it is the interpreter that runs `mlt` (`sys.executable`), created with `sys.executable -m venv`, without searching for other versions in `PATH`. If `--python` or `.python-version` request another version, exits with 6 explaining: use Docker or install `mlt` in a venv with that version. Without a declaration, uses the `mlt` interpreter. Looking for other Pythons on the system is future work.
+- **Declared version:** the Python major.minor version enters the `deps` component of the fingerprint. The manifest records the full version (`3.12.4`) in `environment` and the requested version with its origin (`flag`, `file`, or `default`).
+- **Runner outside the fingerprint:** the runner goes in `environment` (informational), and `diff` shows the difference. The same project, trained in Docker and in venv with the same Python, has the same fingerprint, and `verify` can compare the two.
+- **Without Docker:** `--runner auto` falls back to venv and warns that isolation is lower (`isolation: none` in the manifest). Explicit `--runner docker` without Docker exits with 6, without creating a run. `serve`, `ps`, `stop`, and `logs` use the PID instead of the container.
+- After the build, `pip freeze` becomes the lock in the manifest.
+- `mlt` is installed in the same environment as the scientist's dependencies. Version conflicts appear as resolver errors. Isolating the runtime is future work.
+- The host environment is not inherited by the container; the seed is passed explicitly.
+- **How `mlt` enters the image:** the runner copies the installed `mlt` package (only the training/serving runtime) to the build context and installs it in the image. In editable installation (`pip install -e`), the current source code is copied. The `mlt` version does not change during development, so the environment hash uses the version **and** a hash of the `mlt` source code; `--rebuild` forces reconstruction.
+- **Network:** the build needs network access once (install packages and download the base). After that, the cache allows offline training; the README says so.
+- **Container mounts:** project and `data/` read-only; run output directory writable; `tmpfs` for temporaries; no network during training; user is not root.
 
-## 8. Dados
+## 8. Data
 
-Interface `DataSource`. No MVP, pasta local montada como volume somente leitura; nada é copiado para a imagem.
+`DataSource` interface. In the MVP, local folder mounted as a read-only volume; nothing is copied to the image.
 
-Rastreabilidade em níveis:
+Traceability in levels:
 
-| Nível | Garante | Quando |
+| Level | Guarantees | When |
 |---|---|---|
-| Identificar | dados iguais ou diferentes entre runs; quais arquivos mudaram (hash por arquivo e agregado) | sempre |
-| Verificar | `mlt verify` recusa retreinar se os dados mudaram | sempre |
-| Congelar | conteúdo recuperável, em `store/<hash>/` | `--snapshot-data` |
-| Lakehouse | snapshot imutável com time travel | evolução |
+| Identify | same or different data between runs; which files changed (hash per file and aggregate) | always |
+| Verify | `mlt verify` refuses to retrain if data changed | always |
+| Freeze | recoverable content, in `store/<hash>/` | `--snapshot-data` |
+| Lakehouse | immutable snapshot with time travel | future work |
 
-Sem congelar, a garantia é de identidade, não de conteúdo. Hash de dados grandes é lento; atalho por mtime e tamanho, documentado.
+Without freezing, the guarantee is of identity, not content. Hashing large data is slow; shortcut by mtime and size, documented.
 
-## 9. Run e manifesto
+## 9. Run and manifest
 
-`<projeto>/.mlt/` contém `runs/<run_id>/`, `store/` e `index.sqlite`. Os caches reutilizáveis ficam em `~/.mlt/`.
+`<project>/.mlt/` contains `runs/<run_id>/`, `store/`, and `index.sqlite`. Reusable caches live in `~/.mlt/`.
 
-`run_id`: `AAAAMMDD-HHMMSS-<6 hex aleatórios>`, com criação exclusiva da pasta.
+`run_id`: `YYYYMMDD-HHMMSS-<6 random hex>`, with exclusive directory creation.
 
-Conteúdo do run: `model/` (diretório criado pelo `save`), `metrics.json`, `manifest.json`, `params.yaml` e `schema.yaml` efetivos, `code/` (cópia do projeto sem `data/` e sem `.mlt/`), `train.log`. Assim o run é autocontido: o `verify` retreina a partir de `code/`, e um registry futuro recebe a pasta inteira.
+Run contents: `model/` (directory created by `save`), `metrics.json`, `manifest.json`, effective `params.yaml` and `schema.yaml`, `code/` (copy of the project without `data/` and without `.mlt/`), `train.log`. This makes the run self-contained: `verify` retrains from `code/`, and a future registry receives the entire folder.
 
 ```json
 {
   "manifest_version": 1,
   "run_id": "20261123-214900-a1b2c3",
   "status": "succeeded",
-  "created_at": "...", "duration_s": 42.1,
+  "created_at": "...", "finished_at": "...", "duration_s": 42.1,
   "inputs": {
     "code":   {"hash": "...", "git_commit": "...", "dirty": false},
     "params": {"hash": "...", "values": {"n_estimators": 100}},
@@ -258,175 +274,177 @@ Conteúdo do run: `model/` (diretório criado pelo `save`), `metrics.json`, `man
     "seed": 42, "seed_source": "default"
   },
   "fingerprint": "...",
-  "environment": {"runner": "docker", "image_digest": "...", "python": "3.12.4", "isolation": "no-network"}   // venv: "none",
+  "environment": {"runner": "docker", "env_hash": "...", "python": "3.12.4", "isolation": "no-network"},   // venv: "none"
   "outputs": {
     "metrics": {"accuracy": 0.97},
     "schema": {"hash": "...", "source": "inferred"},
     "artifacts": {"model/model.joblib": "..."}
   },
   "error": null,
-  "verification_of": null   // run_id, nos runs criados pelo verify
+  "verification_of": null   // run_id, in runs created by verify
 }
 ```
 
-- O fingerprint é calculado só sobre `inputs`.
-- O hash do código ignora `.mlt/`, `.git/`, `__pycache__/` e os dados.
-- `status: failed` preenche `error`; o `train.log` é preservado.
+- The fingerprint is calculated only over `inputs`.
+- The code hash ignores `.mlt/`, `.git/`, `__pycache__/`, and data.
+- `status: failed` fills `error`; `train.log` is preserved.
 
-**RunStore:** o SQLite é só índice de consulta (identidade, fingerprint e componentes, ambiente, métricas, caminhos), em modo WAL. O manifesto é a fonte de verdade e o índice é reconstruível. Runs `running` sem processo vivo viram `failed` (`interrupted`) na reconciliação do `runs list`.
+**RunStore:** SQLite is only a query index (identity, fingerprint and components, environment, metrics, paths), in WAL mode. The manifest is the source of truth and the index is rebuildable. Runs stuck in `running` without a live process become `failed` (`interrupted`) during reconciliation in `runs list`.
 
-**Raiz é insumo, run é registro:** o treino copia `params.yaml` e `schema.yaml` para o run. `serve`, `verify` e `diff` leem do run; `check` lê da raiz.
+**Root is input, run is record:** training copies `params.yaml` and `schema.yaml` to the run. `serve`, `verify`, and `diff` read from the run; `check` reads from the root.
 
-**Preparo para registry:** o run é um pacote autocontido, e o serving o obtém sempre pelo `RunStore`, nunca lendo `runs/` diretamente.
+**Registry readiness:** the run is a self-contained package, and serving always obtains it via `RunStore`, never reading `runs/` directly.
 
 ## 10. Seed
 
-Precedência: `--seed`, depois `MLT_SEED`, depois 42. A ferramenta fixa `random`, `numpy` e `PYTHONHASHSEED` e injeta `self.seed`. Valor efetivo e origem (`cli`, `env`, `default`) vão em `inputs`. Valor inválido é erro de contrato.
+Precedence: `--seed`, then `MLT_SEED`, then 42. The tool fixes `random`, `numpy`, and `PYTHONHASHSEED` and injects `self.seed`. Effective value and origin (`cli`, `env`, `default`) go in `inputs`. An invalid value is a contract error.
 
-## 11. API de inferência
+## 11. Inference API
 
-| Endpoint | Contrato |
+| Endpoint | Contract |
 |---|---|
-| `POST /predict` | entrada `{"inputs": [registros]}`; saída `{"predictions": [...], "run_id": "..."}`, uma predição por registro, na mesma ordem, forma livre e serializável em JSON; validação tudo ou nada |
-| `GET /schema` | schema efetivo do run (YAML e JSON Schema) |
-| `GET /metadata` | run_id, fingerprint, created_at, manifest_version, métricas, hash do schema |
-| `GET /health` | 200 só com o modelo carregado |
+| `POST /predict` | input `{"inputs": [records]}`; output `{"predictions": [...], "run_id": "..."}`, one prediction per record, in the same order, free-form and JSON-serializable; all-or-nothing validation |
+| `GET /schema` | effective schema of the run (YAML and JSON Schema) |
+| `GET /metadata` | run_id, fingerprint, created_at, manifest_version, metrics, schema hash |
+| `GET /health` | 200 only with the model loaded |
 
-Erros do `/predict`: 422 (índice e campo do registro inválido), 400 (JSON malformado ou `inputs` vazio), 413 (lote acima do limite, padrão 1000), 500 (erro no `predict`, sem stack trace na resposta), 503 (modelo não carregado).
+Errors from `/predict`: 422 (index and field of invalid record), 400 (malformed JSON or empty `inputs`), 413 (batch above limit, default 1000), 500 (error in `predict`, no stack trace in response), 503 (model not loaded).
 
 ## 12. Serving
 
-- Um serviço serve um run. `latest` vira o `run_id` concreto ao subir.
-- Só serve run `succeeded`. Já ativo: informa a URL e sai com 0.
-- Imagem: ambiente do treino mais o servidor genérico; modelo montado somente leitura.
-- Escuta em 127.0.0.1 por padrão. Docker: container `mlt-<run_id>` com labels; venv: processo com arquivo de PID. O estado vem do Docker ou do PID, não do SQLite.
-- Primeiro plano por padrão. `--detach` só retorna com `/health` em 200, com timeout.
+- One service serves one run. `latest` resolves to the concrete `run_id` on startup.
+- Only serves `succeeded` runs. Already active: reports the URL and exits with 0.
+- Image: training environment plus the generic server; model mounted read-only.
+- Listens on 127.0.0.1 by default. Docker: container `mlt-<run_id>` with labels; venv: process with PID file. State comes from Docker or the PID, not from SQLite.
+- Foreground by default. `--detach` only returns after `/health` returns 200, with timeout.
 
-**Comportamento do `serve` na CLI:**
-- **Saída:** só depois do modelo carregado e do `/health` em 200, imprime a URL, o `run_id` concreto, o caminho `/docs` e um exemplo de `curl` já preenchido com um registro gerado a partir do schema do run. Assim o `/predict` nunca responde 503 logo após o aviso.
-- **Porta:** padrão 8000. Se estiver ocupada, sai com 6 (ambiente) e sugere `--port`; não escolhe outra porta sozinho, para a URL impressa ser previsível.
-- **`/docs`:** o FastAPI o gera; é mantido e citado no README. O OpenAPI reflete o schema do run, para o exemplo ser realista.
-- **Schema:** o servidor lê o `schema.yaml` do run, nunca da raiz, para `/schema` e a validação seguirem o modelo servido.
-- **Erros legíveis:** o 422 indica índice e campo (por exemplo, `inputs[0].petal_width: campo obrigatório`); o teste da API exercita isso com o Iris.
+**`serve` behavior in the CLI:**
+- **Output:** only after the model is loaded and `/health` returns 200, prints the URL, the concrete `run_id`, the `/docs` path, and a `curl` example already filled with a record generated from the run's schema. This way `/predict` never responds 503 immediately after the notice.
+- **Port:** default 8000. If busy, exits with 6 (environment) and suggests `--port`; does not pick another port on its own, so the printed URL is predictable.
+- **`/docs`:** FastAPI generates it; it is kept and cited in the README. The OpenAPI reflects the run's schema, so the example is realistic.
+- **Schema:** the server reads `schema.yaml` from the run, never from the root, so `/schema` and validation follow the served model.
+- **Readable errors:** 422 indicates index and field (e.g., `inputs[0].petal_width: required field`); the API test exercises this with Iris.
 
-## 13. Códigos de saída
+## 13. Exit codes
 
-| Código | Significado |
+| Code | Meaning |
 |---|---|
-| 0 | sucesso (inclusive listagens vazias) |
-| 1 | erro inesperado |
-| 2 | uso incorreto da CLI |
-| 3 | erro de contrato (não cria run) |
-| 4 | falha de execução (cria run `failed`; também `serve` quando o modelo não carrega e `verify` que diverge) |
+| 0 | success (including empty listings) |
+| 1 | unexpected error |
+| 2 | incorrect CLI usage |
+| 3 | contract error (does not create a run) |
+| 4 | execution failure (creates a `failed` run; also `serve` when the model does not load, and `verify` that diverges) |
 | 5 | timeout (`train`; `serve --detach`) |
-| 6 | ambiente indisponível (Docker ausente, build falhou, porta ocupada) |
-| 7 | não encontrado (projeto, run ou serviço) |
-| 8 | operação recusada pelo estado (`serve` de run não `succeeded`; `verify` com dados alterados) |
-| 130 | interrompido por Ctrl+C (`train` deixa o run `failed`, `interrupted`) |
+| 6 | environment unavailable (Docker absent, build failed, busy port) |
+| 7 | not found (project, run, or service) |
+| 8 | operation refused by state (`serve` of non-`succeeded` run; `verify` with altered data) |
+| 130 | interrupted by Ctrl+C (`train` leaves the run `failed`, `interrupted`) |
 
-Enumeração em `mlt.core`; a CLI só traduz exceções para códigos. Erros vão para `stderr`, resultados para `stdout` (o `train` imprime o `run_id`). Cada mensagem diz o que falhou, onde e o que fazer.
+Enumeration in `mlt.core`; the CLI only translates exceptions to codes. Errors go to `stderr`, results to `stdout` (`train` prints the `run_id`). Each message says what failed, where, and what to do.
 
 ## 14. Demo
 
-Iris (150 amostras, 4 features, 3 classes), exportado para `data/iris.csv` com colunas em snake_case (`sepal_length`, `sepal_width`, `petal_length`, `petal_width`). RandomForest com `n_estimators` e `max_depth` em `params.yaml`. Docker como modo principal, venv também funcionando. O template herda de `SklearnModel`, então o `model.py` só escreve o `fit`, e tem comentários curtos explicando cada parte.
+Iris (150 samples, 4 features, 3 classes), exported to `data/iris.csv` with snake_case columns (`sepal_length`, `sepal_width`, `petal_length`, `petal_width`). RandomForest with `n_estimators` and `max_depth` in `params.yaml`. Docker as the primary mode, venv also working. The template inherits from `SklearnModel`. It implements all four methods (`fit`, `predict`, `save`, `load`), with `predict`, `save`, and `load` delegating to `super()` and documented with docstrings and examples — so scientists understand what each method does and when to override.
 
-## 15. Testes
+## 15. Tests
 
-| Fluxo | O que verifica | Tipo | Ambiente |
+| Flow | What it verifies | Type | Environment |
 |---|---|---|---|
-| Contrato inválido | sem subclasse, várias, `fit` sem métricas, seed inválida: erro claro e nenhum run | unitário | local |
-| Treino ponta a ponta | run com modelo, metrics.json e manifesto completo | integração | venv e Docker |
-| Reprodutibilidade | mesma entrada e seed: mesmo fingerprint, métricas equivalentes, `verify` passa | integração | venv e Docker |
-| Só params.yaml mudou | novo run, outro fingerprint, ambiente reaproveitado | integração | venv e Docker |
-| Dados alterados | `verify` recusa; `diff` aponta dados diferentes | integração | venv |
-| API de inferência | ordem, 422/400/413, `/schema`, `/metadata`, `/health` | integração | TestClient |
-| Falhas | exceção no `fit` e timeout geram run `failed` com `error` e log | integração | venv e Docker |
-| Isolamento | treino no Docker não abre conexão de rede | ponta a ponta | Docker |
-| `check --deep` | erro de contrato dentro do ambiente: saída 3, nenhum run | integração | venv |
-| Sem Docker | `auto` cai para venv com aviso; `--runner docker` sai com 6 sem run | integração | venv, Docker simulado ausente |
+| Invalid contract | no subclass, multiple, `fit` without metrics, invalid seed: clear error and no run | unit | local |
+| End-to-end training | run with model, metrics.json, and complete manifest | integration | venv and Docker |
+| Reproducibility | same input and seed: same fingerprint, equivalent metrics, `verify` passes | integration | venv and Docker |
+| Only params.yaml changed | new run, different fingerprint, environment reused | integration | venv and Docker |
+| Altered data | `verify` refuses; `diff` points to data differences | integration | venv |
+| Inference API | order, 422/400/413, `/schema`, `/metadata`, `/health` | integration | TestClient |
+| Failures | exception in `fit` and timeout produce `failed` run with `error` and log | integration | venv and Docker |
+| Isolation | Docker training does not open a network connection | end-to-end | Docker |
+| `check --deep` | contract error inside the environment: exit 3, no run | integration | venv |
+| Without Docker | `auto` falls back to venv with warning; `--runner docker` exits with 6 without run | integration | venv, Docker simulated absent |
 
-Testes com Docker têm marca (`docker`) e são pulados se o Docker não existir. Os testes verificam os códigos de saída, não só as mensagens.
+Tests with Docker are marked (`docker`) and skipped if Docker does not exist. Tests verify exit codes, not just messages.
 
-## 16. Ordem de construção
+## 16. Build order
 
-1. Esqueleto do pacote, `MLModel`, validação de contrato, erros e códigos de saída.
-2. Treino em venv: `DataSource` local, manifesto, `RunStore` (arquivos e SQLite), fingerprint, seed.
-3. CLI: `init` (templates `iris` e `blank`), `check`, `train`, `runs list/show`, `diff`, `verify`.
-4. Runner Docker (build com cache, treino sem rede) e testes de isolamento.
-5. Serving: servidor FastAPI e `serve` (P0); `ps`, `stop` e `logs` (P2).
-6. Falhas, timeout, concorrência e reconciliação de runs interrompidos.
-7. README (com o guia do cientista), `docs/architecture.md`, revisão do `DECISIONS.md` e do `AI_USAGE.md`.
+1. Package skeleton, `MLModel`, contract validation, errors, and exit codes.
+2. venv training: local `DataSource`, manifest, `RunStore` (files and SQLite), fingerprint, seed.
+3. CLI: `init` (`iris` and `blank` templates), `check`, `train`, `runs list/show`, `diff`, `verify`.
+4. Docker runner (build with cache, training without network) and isolation tests.
+5. Serving: FastAPI server and `serve` (P0); `ps`, `stop`, and `logs` (P2).
+6. Failures, timeout, concurrency, and interrupted run reconciliation.
+7. README (with the scientist's guide), `docs/architecture.md`, review of `DECISIONS.md` and `AI_USAGE.md`.
 
-Cada etapa termina com testes passando e um commit. Anotar o tempo gasto por etapa (insumo do `DECISIONS.md`).
+Each step ends with passing tests and a commit. Record the time spent per step (input for `DECISIONS.md`).
 
-### Prioridades (se o tempo apertar, corta-se de baixo para cima)
+### Priorities (if time is tight, cut from bottom to top)
 
-- **P0 (sem isso não há entrega):** contrato e validação, treino (Docker e venv), manifesto e `RunStore`, `runs list/show`, `serve` com `/predict`, testes dos fluxos críticos, README e documentos.
-- **P1:** `check` (estático e `--deep`), `init` com template `iris`, `verify`, `diff`.
-- **P2 (cortar primeiro):** `--snapshot-data`, `serve --detach`, `ps`, `stop`, `logs`, reconciliação de runs interrompidos, template `blank`, `--json`, `runs list --status`. Os fluxos de cada um estão fechados abaixo.
+- **P0 (without this there is no delivery):** contract and validation, training (Docker and venv), manifest and `RunStore`, `runs list/show`, `serve` with `/predict`, critical flow tests, README, and documents.
+- **P1:** `check` (static and `--deep`), `init` with `iris` template, `verify`, `diff`.
+- **P2 (cut first):** `--snapshot-data`, `serve --detach`, `ps`, `stop`, `logs`, interrupted run reconciliation, `blank` template, `--json`, `runs list --status`. The flows for each are closed below.
 
-O que for cortado vai para o `DECISIONS.md` como "não feito por falta de tempo".
+What is cut goes into `DECISIONS.md` as "not done due to time constraints".
 
-### Checklist de entrega
+### Delivery checklist
 
-Repositório no Git acessível; README com exemplo ponta a ponta; `DECISIONS.md`; `AI_USAGE.md`; testes passando; diagrama de arquitetura (AWS); mensagem de entrega com link, data e horário da apresentação.
+Git repository accessible; README with end-to-end example; `DECISIONS.md`; `AI_USAGE.md`; passing tests; architecture diagram (AWS); delivery message with link, date, and time of the presentation.
 
-### Fluxos das features P2 (contrato fechado, implementação só se sobrar tempo)
+### P2 feature flows (contract closed, implementation only if time permits)
 
-- **`--snapshot-data`:** copia os dados para `.mlt/store/<hash>/`, endereçado por conteúdo (hardlink ou reflink quando possível), e grava `frozen: true` no manifesto. Antes de copiar, imprime o tamanho. Se o hash já existe no store, reaproveita sem copiar; um treino sem a flag cujos dados já estão no store também fica `frozen: true`. O `verify` usa o snapshot quando os dados da raiz mudaram. Sem limpeza automática do store (limpeza é fora de escopo, dito no README).
-- **`ps`, `stop`, `logs`:** `ps` lista os serviços do projeto atual (`run_id`, runner, URL, estado, tempo ativo), lendo labels do Docker ou arquivos de PID em `.mlt/serving/`. `stop <run_id>` para o serviço e sai com 0; serviço inexistente sai com 7. `logs <run_id>` aceita `--tail N` (padrão 100) e `-f`.
-- **`serve --detach`:** é P2, junto com `ps`, `stop` e `logs`, porque sem `stop` um serviço em segundo plano não teria como ser encerrado. O P0 é o primeiro plano, encerrado com Ctrl+C.
-- **Reconciliação de runs interrompidos:** um run `running` mantém um lock de arquivo (`flock`) enquanto o processo vive; sem lock ativo, o run vira `failed` (`interrupted`). Roda de forma preguiçosa, no `runs list`, no `runs show` e no início do `train`. Se cortada: o Ctrl+C já deixa o run consistente, mas um `kill -9` deixa o run `running` para sempre, e o README diz isso.
-- **Template `blank`:** `model.py` com os quatro métodos de `MLModel`, comentários e o marcador `# TODO(mlt)`, sem dados. O `fit` levanta `NotImplementedError("implemente o fit")`, e o `check` avisa "template não editado" enquanto o marcador existir.
-- **`--json`:** vale para `runs list`, `runs show`, `diff` e `verify`. Escreve só o JSON no stdout, sem cores nem mensagens; os erros continuam no stderr e os códigos de saída não mudam.
-- **`runs list --status`:** filtro simples por `succeeded` ou `failed`.
-- **`init --force`:** não será implementado; fica como evolução.
+- **`--snapshot-data`:** copies the data to `.mlt/store/<hash>/`, content-addressed (hardlink or reflink when possible), and records `frozen: true` in the manifest. Before copying, prints the size. If the hash already exists in the store, reuses without copying; a training run without the flag whose data is already in the store also becomes `frozen: true`. `verify` uses the snapshot when the root data has changed. No automatic store cleanup (cleanup is out of scope, stated in the README).
+- **`ps`, `stop`, `logs`:** `ps` lists the services of the current project (`run_id`, runner, URL, state, uptime), reading Docker labels or PID files in `.mlt/serving/`. `stop <run_id>` stops the service and exits with 0; nonexistent service exits with 7. `logs <run_id>` accepts `--tail N` (default 100) and `-f`.
+- **`serve --detach`:** is P2, together with `ps`, `stop`, and `logs`, because without `stop` a background service would have no way to be stopped. P0 is the foreground, stopped with Ctrl+C.
+- **Interrupted run reconciliation:** a `running` run holds a file lock (`flock`) while the process lives; without an active lock, the run becomes `failed` (`interrupted`). Runs lazily, in `runs list`, `runs show`, and at the start of `train`. If cut: Ctrl+C already leaves the run consistent, but `kill -9` leaves the run as `running` forever, and the README says so.
+- **`blank` template:** `model.py` with the four `MLModel` methods, comments, and the marker `# TODO(mlt)`, without data. `fit` raises `NotImplementedError("implement fit")`, and `check` warns "unedited template" while the marker exists.
+- **`--json`:** applies to `runs list`, `runs show`, `diff`, and `verify`. Writes only JSON to stdout, without colors or messages; errors continue to stderr and exit codes do not change.
+- **`runs list --status`:** simple filter by `succeeded` or `failed`.
+- **`init --force`:** will not be implemented; left as future work.
 
-## 17. Fora do escopo e evolução
+## 17. Out of scope and evolution
 
-Fora do escopo: autenticação, versionamento de dados, rollback e A/B, monitoramento e drift, GPU, treino distribuído, UI, limites de CPU e memória, limpeza de runs antigos, versionamento de rota da API, estatísticas de dados no manifesto.
+Out of scope: authentication, data versioning, rollback and A/B, monitoring and drift, GPU, distributed training, UI, CPU and memory limits, old run cleanup, API route versioning, data statistics in the manifest.
 
-Evolução, em ordem:
+Evolution, in order:
 
-1. Isolar o runtime do `mlt` do ambiente do cientista (SDK sem dependências mais processo trabalhador).
-2. `DataSource` remoto (S3 e lakehouse, com snapshot).
-3. CLI como cliente de uma API de controle, com `Runner` em AWS Batch ou SageMaker Training.
-4. `RunStore` em S3 e DynamoDB e, depois, registry de runs e modelos com aliases e promoção.
-5. Bloco de saída opcional no `schema.yaml` e `predict_proba`.
-6. Reduzir o atrito de adoção: aceitar um estimador do scikit-learn ou uma função de treino simples por um adaptador, sem exigir a herança de `MLModel`.
-7. Suporte a PySpark: `SparkModel` com `save` e `load` nativos, `fit` com injeção de parâmetros por nome, um `Runner` de cluster (EMR ou Databricks) e um `DataSource` que entregue uma URI em vez de um caminho local. O `fit(data_dir, params)` atual assume dados em pasta local; esse é um limite conhecido do MVP.
+1. Isolate the `mlt` runtime from the scientist's environment (dependency-free SDK plus worker process).
+2. Remote `DataSource` (S3 and lakehouse, with snapshot).
+3. CLI as a client of a control API, with `Runner` on AWS Batch or SageMaker Training.
+4. `RunStore` on S3 and DynamoDB and, later, run and model registry with aliases and promotion.
+5. Optional output block in `schema.yaml` and `predict_proba`.
+6. Reduce adoption friction: accept a scikit-learn estimator or a simple training function through an adapter, without requiring `MLModel` inheritance.
+7. PySpark support: `SparkModel` with native `save` and `load`, `fit` with named-parameter injection, a cluster `Runner` (EMR or Databricks), and a `DataSource` that provides a URI instead of a local path. The current `fit(data_dir, params)` assumes data in a local folder; this is a known MVP limit.
 
-## 18. Diagramas
+## 18. Diagrams
 
-MVP local:
+Local MVP:
 
 ```mermaid
 flowchart LR
   CLI[CLI mlt] --> CORE[mlt.core]
-  CORE --> DSRC[DataSource<br/>pasta local]
-  CORE --> RUN[Runner<br/>Docker ou venv]
-  CORE --> STORE[RunStore<br/>arquivos + SQLite]
-  DSRC -->|dados somente leitura| RUN
-  RUN -->|modelo, metricas, manifesto| STORE
-  STORE -->|runs/run_id| SRV[Serving<br/>FastAPI no container]
-  CLIENT[Cliente] -->|POST /predict| SRV
+  CORE --> DSRC[DataSource<br/>local folder]
+  CORE --> RUN[Runner<br/>Docker or venv]
+  CORE --> STORE[RunStore<br/>files + SQLite]
+  DSRC -->|read-only data| RUN
+  RUN -->|model, metrics, manifest| STORE
+  STORE -->|runs/run_id| SRV[Serving<br/>FastAPI in container]
+  CLIENT[Client] -->|POST /predict| SRV
 ```
 
-Produção na AWS (desenho, não implementado):
+Production on AWS (design, not implemented):
 
 ```mermaid
 flowchart LR
-  DS[Cientista<br/>CLI mlt + Git] -->|push| GIT[(Git)]
+  DS[Scientist<br/>CLI mlt + Git] -->|push| GIT[(Git)]
   GIT --> CB[CodeBuild]
-  CB -->|imagem de ambiente| ECR[(ECR)]
-  DS -->|mlt train e serve| API[API de controle<br/>API Gateway + Lambda]
-  API --> TRAIN[Treino<br/>AWS Batch ou SageMaker Training<br/>sem internet, VPC endpoints]
+  CB -->|environment image| ECR[(ECR)]
+  DS -->|mlt train and serve| API[Control API<br/>API Gateway + Lambda]
+  API --> TRAIN[Training<br/>AWS Batch or SageMaker Training<br/>no internet, VPC endpoints]
   ECR --> TRAIN
-  LH[(S3 + lakehouse Iceberg)] -->|DataSource| TRAIN
-  TRAIN -->|modelo, metricas, manifesto| S3[(S3 artefatos)]
-  TRAIN -->|metadados do run| DDB[(DynamoDB RunStore)]
-  API --> SERVE[Inferencia<br/>ECS Fargate + ALB]
+  LH[(S3 + Iceberg lakehouse)] -->|DataSource| TRAIN
+  TRAIN -->|model, metrics, manifest| S3[(S3 artifacts)]
+  TRAIN -->|run metadata| DDB[(DynamoDB RunStore)]
+  API --> SERVE[Inference<br/>ECS Fargate + ALB]
   ECR --> SERVE
-  S3 -->|modelo somente leitura| SERVE
+  S3 -->|read-only model| SERVE
   DS -->|POST /predict| SERVE
 ```
+
+*See `docs/architecture.md` for detailed component diagrams, the full training and serving flows, and the MVP → AWS evolution mapping.*

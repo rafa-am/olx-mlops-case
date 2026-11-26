@@ -1,47 +1,47 @@
 # CLAUDE.md
 
-Contexto do projeto para o Claude Code.
+Project context for Claude Code.
 
-## O que é
+## What it is
 
-`mlt`: ferramenta (pacote Python com CLI) que leva um cientista de dados do treino reprodutível e isolado até uma API REST de inferência, a partir de apenas código Python. É um case técnico para uma vaga de Machine Learning Engineer. O foco é a ferramenta, não o modelo.
+`mlt`: a Python CLI package that takes a data scientist from reproducible, isolated training to a REST inference API, from Python code alone. This is a technical case study for a Machine Learning Engineer position. The focus is the tool, not the model.
 
-Documentos de referência, em ordem de autoridade:
+Reference documents, in order of authority:
 
-1. `docs/design.md`: o que construir (contratos, manifesto, API, códigos de saída, ordem de construção).
-2. `DECISIONS.md`: por que cada decisão foi tomada e as alternativas descartadas.
-3. `AI_USAGE.md`: registro do uso de IA (ver regra abaixo).
+1. `docs/design.md`: what to build (contracts, manifest, API, exit codes, build order).
+2. `DECISIONS.md`: why each decision was made and the alternatives discarded.
+3. `AI_USAGE.md`: AI usage log (see rule below).
 
-Se algo no código contradiz o `docs/design.md`, pare e pergunte antes de seguir. Se uma decisão mudar na implementação, atualize `docs/design.md` e `DECISIONS.md` no mesmo commit.
+If anything in the code contradicts `docs/design.md`, stop and ask before proceeding. If a decision changes during implementation, update `docs/design.md` and `DECISIONS.md` in the same commit.
 
-## Regras de trabalho
+## Working rules
 
-- Trabalhe uma etapa por vez, na ordem de `docs/design.md` seção 16. Planeje antes de cada etapa e espere a revisão do plano.
-- Respeite as prioridades P0/P1/P2 da seção 16: faça P0 primeiro; P2 só se sobrar tempo. Registre o tempo gasto por etapa e o que foi cortado.
-- O run guarda `code/` (cópia do projeto sem `data/` e `.mlt/`) e `params.yaml`; o `verify` retreina a partir de `code/`. O `mlt` entra na imagem Docker copiado para o contexto de build (hash inclui o código-fonte do `mlt`).
-- Commits pequenos, um por etapa ou comportamento, com os testes passando antes de cada um. Mensagens em português, no imperativo, curtas.
-- Escreva os testes dos fluxos críticos (seção 15) junto com cada etapa, não depois.
-- Não adicione dependências nem recursos fora do escopo (seção 17) sem perguntar.
-- Código simples e legível: o autor vai defender cada decisão por 30 minutos. Explique escolhas não óbvias em comentário curto.
-- Nada de segredos no repositório. `.mlt/`, `~/.mlt`, caches e dados gerados ficam no `.gitignore`.
+- Work one step at a time, in the order of `docs/design.md` section 16. Plan before each step and wait for plan review.
+- Respect the P0/P1/P2 priorities from section 16: do P0 first; P2 only if time permits. Record time spent per step and what was cut.
+- The run stores `code/` (copy of the project without `data/` and `.mlt/`) and `params.yaml`; `verify` retrains from `code/`. `mlt` enters the Docker image copied to the build context (hash includes `mlt` source code).
+- Small commits, one per step or behavior, with tests passing before each. Commit messages in English, imperative mood, short.
+- Write tests for critical flows (section 15) alongside each step, not after.
+- Do not add dependencies or features outside scope (section 17) without asking.
+- Simple and readable code: the author will defend each decision for 30 minutes. Explain non-obvious choices in a short comment.
+- No secrets in the repository. `.mlt/`, `~/.mlt`, caches and generated data go in `.gitignore`.
 
-## Regras de design que não podem ser violadas
+## Design rules that cannot be violated
 
-- A CLI é só camada fina: a lógica fica em `mlt.core`. Os códigos de saída são uma enumeração do núcleo.
-- O núcleo de `src/mlt/model/` (`MLModel`, com `fit`, `predict`, `save` e `load` abstratos) não importa nada fora da biblioteca padrão e não traz padrões ligados a framework. Conveniências como `SklearnModel` (joblib e pandas) ficam em módulos próprios, com importação preguiçosa. O template do Iris herda de `SklearnModel`.
-- O treino roda sem rede e com dados somente leitura. Os dados nunca entram na imagem Docker.
-- O run é imutável. O manifesto é a fonte de verdade; o SQLite é só índice reconstruível.
-- O fingerprint é calculado só sobre `inputs`. O hash do código ignora `.mlt/`, `.git/`, `__pycache__/` e dados.
-- Raiz é insumo, run é registro: `serve`, `verify` e `diff` leem do run; `check` lê da raiz.
-- O serving obtém o run sempre pelo `RunStore`, nunca lendo `runs/` diretamente.
-- O `check` é estático (não importa o `model.py` no host). A validação profunda roda dentro do ambiente, antes de criar o run.
-- `save` e `load` operam sobre um diretório local; o transporte para um registry remoto é do `RunStore`, nunca do modelo.
-- Erro de contrato (código 3) não cria run. Erro de execução (4) e timeout (5) criam run `failed`.
-- `.mlt/` fica dentro do projeto do cientista, nunca no diretório atual por acaso.
-- O README traz o guia do cientista (uma página, ver `docs/design.md` seção 4): classe base a escolher, o que `fit` e `predict` recebem, `requirements.txt` completo e dados em `<projeto>/data/` ou `--data`. Os templates `iris` e `blank` têm comentários curtos em cada método.
-- Não prometer o que não se garante: sem `--snapshot-data`, a rastreabilidade dos dados é de identidade, não de conteúdo.
+- The CLI is a thin layer only: logic lives in `mlt.core`. Exit codes are an enumeration from the core.
+- The `src/mlt/model/` core (`MLModel`, with abstract `fit`, `predict`, `save` and `load`) imports nothing outside the standard library and brings no framework-tied patterns. Conveniences like `SklearnModel` (joblib and pandas) live in their own modules, with lazy imports. The iris template inherits from `SklearnModel`.
+- Training runs without network and with read-only data. Data never enters the Docker image.
+- The run is immutable. The manifest is the source of truth; SQLite is just a rebuildable index.
+- The fingerprint is computed only over `inputs`. The code hash ignores `.mlt/`, `.git/`, `__pycache__/` and data.
+- Root is input, run is record: `serve`, `verify` and `diff` read from the run; `check` reads from the root.
+- Serving always obtains the run via `RunStore`, never reading `runs/` directly.
+- `check` is static (does not import `model.py` on the host). Deep validation runs inside the environment, before creating the run.
+- `save` and `load` operate on a local directory; transport to a remote registry is the `RunStore`'s responsibility, never the model's.
+- Contract error (code 3) does not create a run. Execution error (4) and timeout (5) create a `failed` run.
+- `.mlt/` lives inside the scientist's project, never in the current directory by accident.
+- The README includes the scientist's guide (one page, see `docs/design.md` section 4): which base class to choose, what `fit` and `predict` receive, complete `requirements.txt` and data in `<project>/data/` or `--data`. The `iris` and `blank` templates have short comments on each method.
+- Do not promise what cannot be guaranteed: without `--snapshot-data`, data traceability is identity-level, not content-level.
 
-## Estrutura
+## Structure
 
 ```
 src/mlt/{cli,core,model,runners,datasources,runstore,serving,templates/{iris,blank}}
@@ -50,27 +50,27 @@ docs/{design.md,architecture.md}
 README.md  DECISIONS.md  AI_USAGE.md
 ```
 
-## Comandos
+## Commands
 
-- Instalar para desenvolvimento: `pip install -e ".[dev]"`
-- Testes: `pytest` (testes com Docker têm a marca `docker` e são pulados sem Docker; `pytest -m docker` roda só eles)
-- Exemplo ponta a ponta: `mlt init /tmp/demo --template iris && mlt train /tmp/demo && mlt runs list`
-- Formatação e lint: a definir na etapa 1 (sugestão: ruff).
+- Install for development: `pip install -e ".[dev]"`
+- Tests: `pytest` (Docker tests are marked `docker` and skipped without Docker; `pytest -m docker` runs them only)
+- End-to-end example: `mlt init /tmp/demo --template iris && mlt train /tmp/demo && mlt runs list`
+- Formatting and lint: to be defined in step 1 (suggestion: ruff).
 
-## Registro do uso de IA (obrigatório)
+## AI usage log (required)
 
-Ao final de cada etapa, acrescente ao `AI_USAGE.md` (seção "O que a IA gerou e foi corrigido") qualquer ponto em que o autor corrigiu, rejeitou ou ajustou o que foi gerado, com o motivo. Se não houve correção, diga isso na resposta, para o autor registrar o que verificou e como.
+At the end of each step, add to `AI_USAGE.md` (section "What the AI generated and was corrected") any point where the author corrected, rejected, or adjusted what was generated, with the reason. If no correction was made, state that in the response so the author can record what was verified and how.
 
-## Fora do escopo
+## Out of scope
 
-Autenticação, versionamento de dados, rollback e A/B, monitoramento, GPU, treino distribuído, UI, limites de CPU e memória, limpeza de runs, versionamento de rota, estatísticas de dados no manifesto. A nuvem (AWS) é só desenho.
+Authentication, data versioning, rollback and A/B, monitoring, GPU, distributed training, UI, CPU and memory limits, run cleanup, route versioning, data statistics in the manifest. The cloud (AWS) is design only.
 
-- Instalação: Python `>=3.10` no host (`pyproject.toml`). `mlt --version` mostra versão, Python e a detecção do Docker (disponível e daemon ativo). O README lista como pré-requisitos Docker em execução (opcional) e rede no primeiro build.
-- `mlt init <pasta>`: cria pasta nova, recusa pasta não vazia (saída 2), gera `.gitignore` com `.mlt/`, não roda `git init`, imprime os próximos passos.
-- `check`: dados via `DataSource.check()` (MVP: pasta local existe e não vazia; erro saída 3); herança indireta gera aviso, não erro; saída `ok`/`aviso`/`erro` com arquivo e linha. Descoberta de projeto sobe até `model.py` ou `.mlt/`; `runs list` sem runs responde saída 0.
-- `train`: resumo final com run_id, status, métricas e próxima ação; aviso de build lento; run idêntico não treina (saída 0, `--force` repete); Ctrl+C marca run `failed` (`interrupted`) e sai 130; falha de build sai 6 sem criar run.
-- Python: precedência `--python` > `.python-version` > padrão (Docker 3.12; venv usa `sys.executable`, sem procurar no PATH; versão diferente no venv sai 6). Major.minor entra no `deps` do fingerprint. Runner fora do fingerprint (só em `environment`). `train` e `check` imprimem valores efetivos e a origem (python, runner, seed). Sem Docker: `auto` cai para venv com aviso, `docker` explícito sai 6.
-- `runs list`: linha por run (run_id, status, quando, duração, até 3 métricas, fingerprint curto), limite 20, `--all`. `runs show`: seções identidade/entradas/ambiente/resultados/erro; `--json` = manifesto. Todo comando com `run_id` aceita `latest` e prefixo único; inexistente ou ambíguo sai 7.
-- `serve`: imprime URL, run_id, /docs e `curl` preenchido só após o modelo carregar e /health 200; porta padrão 8000, ocupada sai 6 (sugere --port, não troca sozinho); /docs mantido; schema lido do run, nunca da raiz.
-- `diff <a> <b>`: lê manifestos, começa com 'fingerprint: diferente (componentes)', mostra só o que difere. `verify <run_id>`: versão mínima; retreina só do que o run guardou (`code/`, params, schema, seed, Python) com o mesmo runner; cria run com `verification_of`; compara fingerprint e métricas (tolerância relativa fixa 1e-6); saída 0 reproduzido, 4 divergiu, 8 se dados mudaram sem snapshot. Sem `--tolerance` nem hash de artefato. Cortável: o teste de integração 'treina duas vezes' cobre o argumento.
-- P2 com fluxo fechado em `docs/design.md` (antes da seção 17): `--snapshot-data` (store por conteúdo, `frozen`), `serve --detach` + `ps`/`stop`/`logs` (PID em `.mlt/serving/`), reconciliação por `flock`, template `blank` (marcador `# TODO(mlt)`), `--json` (list, show, diff, verify), `runs list --status`. `init --force` não será feito. `serve --detach` é P2: o P0 é primeiro plano.
+- Installation: Python `>=3.10` on the host (`pyproject.toml`). `mlt --version` shows version, Python and Docker detection (available and daemon active). The README lists Docker running (optional) and network on first build as prerequisites.
+- `mlt init <folder>`: creates a new folder, refuses non-empty folder (exit 2), generates `.gitignore` with `.mlt/`, does not run `git init`, prints next steps.
+- `check`: data via `DataSource.check()` (MVP: local folder exists and non-empty; error exit 3); indirect inheritance produces a warning, not an error; output `ok`/`warning`/`error` with file and line. Project discovery walks up to `model.py` or `.mlt/`; `runs list` with no runs responds exit 0.
+- `train`: final summary with run_id, status, metrics and next action; slow build warning; identical run does not train (exit 0, `--force` repeats); Ctrl+C marks run `failed` (`interrupted`) and exits 130; build failure exits 6 without creating a run.
+- Python: precedence `--python` > `.python-version` > default (Docker 3.12; venv uses `sys.executable`, without searching PATH; different version in venv exits 6). Major.minor enters the `deps` fingerprint. Runner is outside the fingerprint (informational only). `train` and `check` print effective values and their origin (python, runner, seed). Without Docker: `auto` falls back to venv with a warning, explicit `docker` exits 6.
+- `runs list`: one line per run (run_id, status, when, duration, up to 3 metrics, short fingerprint), limit 20, `--all`. `runs show`: sections identity/inputs/environment/outputs/error; `--json` = manifest. Every command with `run_id` accepts `latest` and unique prefix; non-existent or ambiguous exits 7.
+- `serve`: prints URL, run_id, /docs and filled `curl` only after model loads and /health returns 200; default port 8000, occupied exits 6 (suggests --port, does not auto-switch); /docs kept; schema read from run, never from root.
+- `diff <a> <b>`: reads manifests, starts with 'fingerprint: different (components)', shows only what differs. `verify <run_id>`: minimal version; retrains only from what the run stored (`code/`, params, schema, seed, Python) with the same runner; creates run with `verification_of`; compares fingerprint and metrics (fixed relative tolerance 1e-6); exit 0 reproduced, 4 diverged, 8 if data changed without snapshot. No `--tolerance` or artifact hash. Cuttable: the integration test 'trains twice' covers the argument.
+- P2 with closed flow in `docs/design.md` (before section 17): `--snapshot-data` (content-addressed store, `frozen`), `serve --detach` + `ps`/`stop`/`logs` (PID in `.mlt/serving/`), reconciliation via `flock`, `blank` template (marker `# TODO(mlt)`), `--json` (list, show, diff, verify), `runs list --status`. `init --force` will not be done. `serve --detach` is P2: P0 is foreground only.
