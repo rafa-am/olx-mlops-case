@@ -149,3 +149,14 @@ flowchart LR
 **What does not change:** the scientist's contract (`model.py`, `requirements.txt`, `params.yaml`, `schema.yaml`) and the manifest format. A run produced locally and one produced on AWS are identical JSON objects, and `diff`/`verify` work across both.
 
 **Network isolation in production:** training jobs run in a VPC with no internet gateway; S3 and ECR are accessed via VPC endpoints. Same guarantee as `--network none` in the local Docker runner.
+
+### Alternatives considered
+
+| Component | Proposed | Alternative | Why proposed wins |
+|-----------|----------|-------------|-------------------|
+| Runner | AWS Batch | SageMaker Training | SageMaker imposes opinions on container entry points and data channels that conflict with `mlt`'s arbitrary-container model; Batch runs any Docker image without framework constraints |
+| RunStore index | DynamoDB | RDS / Aurora Serverless | DynamoDB is sufficient for the queries `mlt` needs (lookup by run_id, fingerprint, status); RDS adds operational overhead without meaningful benefit at this query pattern |
+| Serving | ECS Fargate + ALB | SageMaker Endpoints | SageMaker Endpoints couple the serving layer to the SageMaker ecosystem and limit container flexibility; ECS Fargate keeps the same `mlt-env` image used in training |
+| Serving | ECS Fargate + ALB | Lambda + Function URL | Lambda cold start and 15-minute execution limit are incompatible with large model loading times; Fargate runs a persistent process like the local `mlt serve` |
+| DataSource | S3 + Iceberg | S3 with versioning only | Iceberg enables time-travel and ACID snapshots, making `verify` unconditionally safe; plain S3 versioning does not provide a stable snapshot URI across overwrites |
+| Image build | CodeBuild | GitHub Actions + ECR | Either works; GitHub Actions is more natural for teams already on GitHub and avoids an extra AWS service, but CodeBuild keeps the entire pipeline within AWS for teams with stricter network or compliance requirements |
