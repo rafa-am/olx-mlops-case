@@ -41,7 +41,7 @@ flowchart TD
     RUNNER -->|venv| VENV[~/.mlt/envs/env_hash/bin/python\n-m mlt.serving.server]
     RUNNER -->|docker| DOCKER[docker run\n-v run_dir:/run:ro\nmlt-env:hash]
 
-    VENV --> SERVER[server.py\nloads model from run_dir/code/model.py]
+    VENV --> SERVER[server.py\nloads class from run_dir/code/model.py\nloads artifacts from run_dir/model/]
     DOCKER --> SERVER
 
     SERVER -->|FastAPI app| APP[create_app\nmanifest, schema, model]
@@ -59,7 +59,7 @@ flowchart TD
 ```mermaid
 flowchart LR
     subgraph CLI [src/mlt/cli]
-        TC[train_cmd] & SC[serve_cmd] & IC[init_cmd] & CC[check_cmd]
+        TC[train_cmd] & SC[serve_cmd] & IC[init_cmd] & CC[check_cmd] & RC[runs_cmd] & DC[diff_cmd] & VC[verify_cmd]
     end
 
     subgraph CORE [src/mlt/core]
@@ -86,7 +86,7 @@ flowchart LR
     CORE --> RUNNERS
     CORE --> STORE
     CORE --> MODEL
-    CLI --> SERVING
+    SC -->|spawns subprocess| SERVING
     SERVING --> MODEL
     SERVING --> STORE
 ```
