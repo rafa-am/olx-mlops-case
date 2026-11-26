@@ -250,10 +250,14 @@ Approximate time spent per step (generation + review + correction rounds):
 
 **What I would do differently with more time:**
 
-*(Author's section — fill in before the presentation.)*
+- **Isolate the `mlt` runtime from the scientist's environment.** Today `mlt` (FastAPI, uvicorn, pydantic) is installed in the same venv or Docker image as the scientist's dependencies. This was the right call for the MVP — one environment, simple to reason about — but it creates a known version-conflict risk. With more time, I would run the server in a separate process with its own environment, keeping the scientist's environment clean.
 
-Suggested topics to address:
-- Whether the design-first approach (whiteboard → design.md → implementation) was worth the investment, and what it avoided
-- The `_mlt_pkg.py` non-editable install complexity — whether a simpler convention (always require editable install in dev) would have been cleaner
-- The decision to keep the `mlt` runtime inside the scientist's isolated environment (same venv/image) instead of a separate worker process — the trade-off between simplicity now and isolation later
-- What would have been cut first if the 7-day deadline had been 3 days
+- **Deliver the `blank` template.** It is P2 and small (~30 min). It completes the story for scientists not using scikit-learn and makes `MLModel` more tangible than just a base class described in the README.
+
+- **Add an end-to-end subprocess test for `mlt serve`.** The serving tests use `TestClient` (no subprocess). A test that actually spawns `uvicorn` via `serve_cmd` would give stronger confidence in the full `serve_cmd → subprocess → uvicorn → model.predict` path.
+
+**On feature engineering and scope:**
+
+`mlt` covers the cycle from ready data to trained model to REST API. Feature engineering — building the input dataset from raw sources — is deliberately out of scope. For more complex projects, a Feature Store (Feast, Tecton, SageMaker Feature Store) would sit upstream of `mlt`: the Feature Store delivers features, `mlt` trains and serves the model.
+
+The architecture already has the right extension points: `DataSource` for training-time feature retrieval and a middleware layer for online enrichment at `/predict` time. But incorporating feature engineering into `mlt` itself would break its core contract — *"the scientist provides data, mlt handles the rest"* — and push it toward a full MLOps platform, which is a different tool with a different scope.
