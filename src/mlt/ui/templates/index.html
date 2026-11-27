@@ -1871,8 +1871,10 @@ function startVerifyPoll(orig) {
       if (labelEl) labelEl.textContent = building ? 'build.log' : 'train.log';
       if (logBlock) {
         try {
+          // During build: read the snapshot's own build.log (not the project root's).
+          // Once new_run_id is set the run record exists and train.log is live.
           const url = building
-            ? '/api/build/log?tail=40'
+            ? '/api/verify/log?tail=40'
             : `/api/runs/${encodeURIComponent(snap.new_run_id)}/log?tail=40`;
           const logData = await api(url);
           const lines = logData.lines || [];

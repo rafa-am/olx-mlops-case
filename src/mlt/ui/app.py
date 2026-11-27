@@ -252,13 +252,19 @@ class _VerifyState:
 
     def __init__(self) -> None:
         self._lock = threading.Lock()
-        self.run_id: str | None = None        # run being verified
-        self.new_run_id: str | None = None    # new run created by verify
+        self.run_id: str | None = None        # run being verified (resolved full ID)
+        self.new_run_id: str | None = None    # new run created by verify (set early via on_run_created)
         self.status: str = "idle"             # idle | running | done | failed
         self.error: str | None = None
         self.result: dict | None = None       # VerifyResult fields on completion
         self._thread: threading.Thread | None = None
         self._runner = None
+
+    def _on_run_created(self, run_id: str) -> None:
+        # Called from the training thread as soon as the new run record exists,
+        # before training starts.  Lets the UI switch from build.log to train.log.
+        with self._lock:
+            self.new_run_id = run_id
 
     def start(self, project_dir: Path, run_id: str, runner: str | None = None) -> None:
         with self._lock:
@@ -278,6 +284,7 @@ class _VerifyState:
                     run_id=run_id,
                     runner=runner,
                     on_runner_created=lambda r: setattr(self, "_runner", r),
+                    on_run_created=self._on_run_created,
                 )
                 with self._lock:
                     if self.status != "failed":
@@ -566,6 +573,32 @@ def create_ui_app(project_dir: Path) -> FastAPI:
     def verify_status():
         """Return the current verification state."""
         return _verify.snapshot()
+
+    @app.get("/api/verify/log")
+    def verify_log(tail: int = 50):
+        """Return the last *tail* lines of the build.log from the verify's code snapshot.
+
+        During environment build the log lives at
+        ``runs/<orig_run_id>/code/.mlt/build.log``, not in the project root —
+        because verify re-trains from the snapshot directory, not from the
+        live project.  Once a new run is created the UI switches to
+        /api/runs/{new_run_id}/log instead.
+        """
+        snap = _verify.snapshot()
+        if snap["status"] != "running" or not snap["run_id"]:
+            return {"lines": []}
+        from mlt.runstore.store import RunStore
+
+        store = RunStore(project_dir)
+        try:
+            m = store.get_run(snap["run_id"])
+            log_path = store.run_dir(m.run_id) / "code" / ".mlt" / "build.log"
+        except Exception:
+            return {"lines": []}
+        if not log_path.exists():
+            return {"lines": []}
+        lines = log_path.read_text(encoding="utf-8", errors="replace").splitlines()
+        return {"lines": lines[-tail:]}
 
     @app.delete("/api/verify")
     def cancel_verify():

@@ -41,6 +41,8 @@ def verify_run(
     runner: str | None = None,
     on_progress: Callable[[str], None] | None = None,
     on_runner_created: Callable | None = None,
+    on_step: Callable[[str], None] | None = None,
+    on_run_created: Callable[[str], None] | None = None,
 ) -> VerifyResult:
     """Re-train from a run's snapshot and check reproducibility.
 
@@ -126,6 +128,8 @@ def verify_run(
         verification_of=orig.run_id,
         _store_project_dir=project_dir,
         on_runner_created=on_runner_created,
+        on_step=on_step,
+        on_run_created=on_run_created,
     )
 
     new_m = store.get_run(new_run_id)

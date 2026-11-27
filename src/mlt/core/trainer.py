@@ -64,6 +64,7 @@ def train(
     on_slow_build: "Callable[[], None] | None" = None,
     on_runner_created: "Callable | None" = None,
     on_step: "Callable[[str], None] | None" = None,
+    on_run_created: "Callable[[str], None] | None" = None,
     verification_of: str | None = None,
     _store_project_dir: Path | None = None,
 ) -> str:
@@ -79,8 +80,11 @@ def train(
     timeout:      Training timeout in seconds.
     force:        Re-train even if an identical run already exists.
     env:          Environment mapping for seed resolution (defaults to os.environ).
-    on_slow_build: Called when the environment build is known to be slow.
-    on_step:      Called with a step name each time a new phase begins.
+    on_slow_build:  Called when the environment build is known to be slow.
+    on_step:        Called with a step name each time a new phase begins.
+    on_run_created: Called with the run_id immediately after the run record is
+                    created (before training starts). Useful for UIs that want
+                    to track the new run before training finishes.
     """
     import os
 
@@ -185,6 +189,8 @@ def train(
         verification_of=verification_of,
     )
     run_dir = store.create_run(partial)
+    if on_run_created:
+        on_run_created(run_id)
 
     # 8. Copy project snapshot and effective files -------------------------
     _copy_code(project_dir, run_dir / "code", exclude_names=extra_exclude | {".mlt"})
