@@ -510,6 +510,18 @@ def create_ui_app(project_dir: Path) -> FastAPI:
                 pass
         return snap
 
+    @app.post("/api/train/dismiss")
+    def dismiss_train():
+        """Reset a terminal (done/failed) training state back to idle."""
+        with _train._lock:
+            if _train.status == "running":
+                raise HTTPException(status_code=409, detail="Training is still running.")
+            _train.status = "idle"
+            _train.run_id = None
+            _train.error  = None
+            _train.steps  = []
+        return {"ok": True}
+
     @app.delete("/api/train")
     def cancel_train():
         """Request cancellation of the current training job (best-effort)."""

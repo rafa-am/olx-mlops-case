@@ -780,8 +780,12 @@ function buildTrainView(params, trainStatus) {
   } else if (trainStatus.status === 'failed') {
     statusHtml = `
       <div class="card" style="border-color:var(--fail)">
-        <div class="card-title" style="color:var(--fail)">Training failed</div>
-        <p style="font-size:13px;color:var(--fg2)">${escHtml(trainStatus.error || 'Unknown error')}</p>
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div class="card-title" style="color:var(--fail)">Training failed</div>
+          <button class="btn btn-ghost" style="font-size:12px;padding:4px 10px"
+            onclick="dismissTrain()">Dismiss</button>
+        </div>
+        <p style="font-size:13px;color:var(--fg2);margin-top:4px">${escHtml(trainStatus.error || 'Unknown error')}</p>
         ${trainStatus.run_id ? `<a href="#/run/${trainStatus.run_id}" class="btn btn-secondary" style="margin-top:10px">View run details</a>` : ''}
       </div>`;
   }
@@ -920,6 +924,12 @@ async function cancelTrain() {
   } catch (e) {
     alert(`Cancel failed: ${e.message}`);
   }
+}
+
+async function dismissTrain() {
+  try { await fetch('/api/train/dismiss', { method: 'POST' }); } catch (_) {}
+  const params = await api('/api/project/params');
+  buildTrainView(params, { status: 'idle' });
 }
 
 function startTrainPoll() {
