@@ -78,12 +78,17 @@ class _TrainState:
                     on_runner_created=lambda r: setattr(self, "_runner", r),
                 )
                 with self._lock:
-                    self.run_id = run_id
-                    self.status = "done"
+                    # Don't overwrite an explicit cancel (status already "failed").
+                    if self.status != "failed":
+                        self.run_id = run_id
+                        self.status = "done"
             except Exception as exc:
                 with self._lock:
-                    self.error = str(exc)
-                    self.status = "failed"
+                    # Preserve the user-facing "Cancelled by user." message if
+                    # the exception was triggered by our own terminate() call.
+                    if self.status != "failed":
+                        self.error = str(exc)
+                        self.status = "failed"
 
         self._thread = threading.Thread(target=_run, daemon=True)
         self._thread.start()
