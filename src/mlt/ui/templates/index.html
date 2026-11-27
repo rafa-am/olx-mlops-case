@@ -348,7 +348,8 @@ input[type=checkbox] { width: 14px; height: 14px; cursor: pointer; accent-color:
   <hr class="sb-sep">
 
   <div class="sb-info" id="sb-info">
-    <span>docker: <b>—</b></span>
+    <span>docker: <b id="sb-docker">—</b></span>
+    <span>mlt Python: <b id="sb-python">—</b></span>
     <span id="sb-pkg">mlt —</span>
   </div>
 
@@ -367,10 +368,12 @@ input[type=checkbox] { width: 14px; height: 14px; cursor: pointer; accent-color:
 // State
 // ===================================================================
 const S = {
-  meta:    null,
-  project: null,
-  runs:    null,          // cached list (all)
-  selected: [],           // run_ids chosen for compare
+  meta:     null,
+  project:  null,
+  system:   null,   // { docker, python }
+  settings: null,   // { python_requested, python_source, runner, runner_display, ... }
+  runs:     null,   // cached list (all)
+  selected: [],     // run_ids chosen for compare
   statusFilter: 'all',
 };
 
@@ -486,11 +489,25 @@ window.addEventListener('DOMContentLoaded', async () => {
     return;
   }
 
-  // Sidebar
+  // Sidebar: package info
   document.title = `mlt ${S.meta.version}`;
   $('#sb-path').textContent = S.project.dir;
-  $('#sb-pkg').innerHTML =
-    `<b>mlt · Model Lifecycle Toolkit</b><br>version ${S.meta.version}`;
+  $('#sb-pkg').innerHTML = `<b>mlt · Model Lifecycle Toolkit</b><br>version ${S.meta.version}`;
+
+  // Sidebar: system + project settings (non-blocking — UI renders first)
+  Promise.all([api('/api/system'), api('/api/project/settings')])
+    .then(([sys, settings]) => {
+      S.system   = sys;
+      S.settings = settings;
+      const dockerEl  = $('#sb-docker');
+      const pythonEl  = $('#sb-python');
+      if (dockerEl) {
+        dockerEl.textContent = sys.docker;
+        dockerEl.className   = sys.docker === 'available' ? 'ok' : 'err';
+      }
+      if (pythonEl) pythonEl.textContent = sys.python;
+    })
+    .catch(() => {});  // sidebar info is best-effort
 
   route();
 });
@@ -501,8 +518,20 @@ window.addEventListener('DOMContentLoaded', async () => {
 async function renderHome() {
   $('#main').innerHTML = '<div id="loading-state">Loading…</div>';
 
+  // Ensure settings and runs load together (settings may already be cached)
   let runs = [];
-  try { runs = await api('/api/runs?limit=20'); } catch(_) {}
+  const [runsResult] = await Promise.allSettled([
+    api('/api/runs?limit=20'),
+    S.settings ? Promise.resolve() : api('/api/project/settings').then(s => { S.settings = s; }).catch(() => {}),
+    S.system   ? Promise.resolve() : api('/api/system').then(s => {
+      S.system = s;
+      const dockerEl = $('#sb-docker');
+      const pythonEl = $('#sb-python');
+      if (dockerEl) { dockerEl.textContent = s.docker; dockerEl.className = s.docker === 'available' ? 'ok' : 'err'; }
+      if (pythonEl) pythonEl.textContent = s.python;
+    }).catch(() => {}),
+  ]);
+  if (runsResult.status === 'fulfilled') runs = runsResult.value;
   const last = runs[0];
 
   let nextHtml = '';
@@ -568,8 +597,10 @@ async function renderHome() {
         <table class="kv">
           ${kvRows([
             ['folder',  `<span style="font-size:12px">${escHtml(S.project.dir)}</span>`],
-            ['python',  '—'],
-            ['runner',  '—'],
+            ['python',  S.settings?.python_requested
+              ? `${S.settings.python_requested} (${S.settings.python_source})`
+              : '—'],
+            ['runner',  S.settings?.runner_display ?? '—'],
             ['runs',    totalRuns],
           ])}
         </table>

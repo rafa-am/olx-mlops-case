@@ -10,14 +10,25 @@ from __future__ import annotations
 
 import dataclasses
 import importlib.metadata
+import subprocess
+import sys
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 
 from mlt.core.diff import diff_runs_by_id
-from mlt.core.errors import MltError, NotFoundError
+from mlt.core.errors import MltError
 from mlt.core.runs import describe_run, list_runs
+
+
+def _docker_status() -> str:
+    """Return 'available' or 'unavailable' (matches sidebar mock label)."""
+    try:
+        r = subprocess.run(["docker", "info"], capture_output=True, timeout=5)
+        return "available" if r.returncode == 0 else "unavailable"
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return "unavailable"
 
 
 def _not_found(exc: MltError) -> HTTPException:
@@ -42,6 +53,14 @@ def create_ui_app(project_dir: Path) -> FastAPI:
             "description": md["Summary"],
         }
 
+    @app.get("/api/system")
+    def system():
+        """Host system info: docker status and server Python version."""
+        return {
+            "docker": _docker_status(),
+            "python": sys.version.split()[0],
+        }
+
     @app.get("/api/project")
     def project():
         """Project info: directory and existence of model.py."""
@@ -49,6 +68,32 @@ def create_ui_app(project_dir: Path) -> FastAPI:
             "dir": str(project_dir),
             "has_model": (project_dir / "model.py").exists(),
         }
+
+    @app.get("/api/project/settings")
+    def project_settings():
+        """Effective python, seed and runner for this project (no training)."""
+        from mlt.core.settings import resolve_effective_settings
+
+        try:
+            s = resolve_effective_settings(project_dir)
+            return {
+                "python_requested": s.python_requested,
+                "python_source":    s.python_source,
+                "runner":           s.runner,
+                "runner_display":   s.runner_display,
+                "seed":             s.seed,
+                "seed_source":      s.seed_source,
+            }
+        except Exception:
+            # If settings can't be resolved (missing files etc.) return nulls.
+            return {
+                "python_requested": None,
+                "python_source":    None,
+                "runner":           None,
+                "runner_display":   None,
+                "seed":             None,
+                "seed_source":      None,
+            }
 
     @app.get("/api/runs")
     def runs(limit: int = 50, status: str | None = None):
