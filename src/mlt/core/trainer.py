@@ -163,6 +163,14 @@ def train(
     _copy_if_exists(project_dir / "params.yaml", run_dir / "params.yaml")
     _copy_if_exists(project_dir / "schema.yaml", run_dir / "schema.yaml")
 
+    # Hold an exclusive flock on train.lock for the entire training duration.
+    # Any other process can detect an orphaned run by trying a non-blocking
+    # acquire: if it succeeds, this process died unexpectedly.
+    import fcntl as _fcntl
+    _lock_path = run_dir / "train.lock"
+    _lock_fd = _lock_path.open("w")
+    _fcntl.flock(_lock_fd.fileno(), _fcntl.LOCK_EX)
+
     # 9. Execute training --------------------------------------------------
     try:
         exit_code = runner_instance.run_training(
@@ -175,6 +183,9 @@ def train(
     except KeyboardInterrupt:
         store.fail_run(run_id, "interrupted")
         raise
+    finally:
+        # Release lock — either normally or on any exception.
+        _lock_fd.close()
 
     # 10. Handle result ----------------------------------------------------
     if exit_code == 0:

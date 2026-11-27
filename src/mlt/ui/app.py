@@ -96,6 +96,11 @@ def create_ui_app(project_dir: Path) -> FastAPI:
     app = FastAPI(title="mlt UI", docs_url=None, redoc_url=None)
     _train = _TrainState()
 
+    # Reconcile any runs left in 'running' by a previous server session.
+    from mlt.core.reconcile import reconcile_running_runs
+
+    reconcile_running_runs(project_dir)
+
     # ------------------------------------------------------------------
     # API — JSON endpoints consumed by the SPA
     # ------------------------------------------------------------------
