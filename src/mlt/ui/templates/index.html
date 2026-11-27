@@ -1854,7 +1854,11 @@ function startVerifyPoll(orig) {
 
       if (snap.status !== 'running') {
         clearVerifyPoll();
-        buildVerifyView(orig, snap);
+        // Only rebuild if the user is still on this verify page; avoid hijacking
+        // other pages when verify finishes in the background.
+        if (location.hash.startsWith(`#/verify/${encodeURIComponent(orig.run_id)}`)) {
+          buildVerifyView(orig, snap);
+        }
         return;
       }
 
