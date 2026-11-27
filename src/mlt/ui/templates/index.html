@@ -1305,12 +1305,9 @@ async function renderHome() {
         <label style="font-size:12px;color:var(--fg3);display:block;margin-bottom:4px">Folder</label>
         <input type="text" id="open-folder-input" value="${escHtml(S.project.dir)}"
           style="margin-bottom:10px">
-        <div style="display:flex;gap:8px">
-          <button class="btn btn-secondary" disabled aria-disabled="true">Open</button>
-          <a href="#/new" class="btn btn-secondary">New project</a>
-        </div>
+        <a href="#/new" class="btn btn-secondary">New project</a>
         <p style="font-size:11px;color:var(--fg3);margin-top:8px">
-          Switching projects via the UI is not yet supported — restart <code>mlt ui</code> with the new folder.
+          To open a different project, restart <code>mlt ui &lt;folder&gt;</code>.
         </p>
       </div>
     </div>`;
