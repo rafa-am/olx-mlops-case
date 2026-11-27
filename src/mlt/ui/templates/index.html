@@ -855,10 +855,10 @@ function clearTrainPoll() {
 async function renderHome() {
   $('#main').innerHTML = '<div id="loading-state">Loading…</div>';
 
-  // Ensure settings and runs load together (settings may already be cached)
-  let runs = [];
-  const [runsResult] = await Promise.allSettled([
+  let runs = [], trainStatus = { status: 'idle' };
+  const [runsResult, trainResult] = await Promise.allSettled([
     api('/api/runs?limit=20'),
+    api('/api/train/status'),
     S.settings ? Promise.resolve() : api('/api/project/settings').then(s => { S.settings = s; }).catch(() => {}),
     S.system   ? Promise.resolve() : api('/api/system').then(s => {
       S.system = s;
@@ -869,6 +869,7 @@ async function renderHome() {
     }).catch(() => {}),
   ]);
   if (runsResult.status === 'fulfilled') runs = runsResult.value;
+  if (trainResult.status === 'fulfilled') trainStatus = trainResult.value;
   const last = runs[0];
 
   let nextHtml = '';
@@ -935,7 +936,9 @@ async function renderHome() {
         <table class="kv">
           ${kvRows([
             ['last run',  lastRunLine],
-            ['training',  'none in progress'],
+            ['training',  trainStatus.status === 'running'
+              ? `<a href="#/train" style="color:var(--warn)">running — ${trainStatus.run_id ? escHtml(trainStatus.run_id) : 'starting…'}</a>`
+              : 'none in progress'],
             ['service',   'none in progress'],
           ])}
         </table>
