@@ -553,6 +553,7 @@ function setActivePage(page) {
 async function route() {
   clearTrainPoll();
   clearServePoll();
+  clearVerifyPoll();
 
   const hash = location.hash || '#/';
   const path = hash.slice(1);  // strip '#'
@@ -579,6 +580,9 @@ async function route() {
   } else if (path === '/new') {
     setActivePage('new');
     renderNewProject();
+  } else if (path.startsWith('/verify/')) {
+    setActivePage('runs');
+    renderVerify(decodeURIComponent(path.slice(8)));
   } else {
     setActivePage('home');
     renderHome();
@@ -1476,7 +1480,9 @@ async function renderRunDetail(runId) {
   const canServe = m.status === 'succeeded';
   const actionsHtml = `
     <div class="detail-actions">
-      <button class="btn btn-secondary" disabled aria-disabled="true">Verify reproducibility</button>
+      ${canServe
+        ? `<a href="#/verify/${escHtml(m.run_id)}" class="btn btn-secondary">Verify reproducibility</a>`
+        : `<button class="btn btn-secondary" disabled aria-disabled="true">Verify reproducibility</button>`}
       ${canServe
         ? `<button class="btn btn-primary" onclick="confirmStartServe('${escHtml(m.run_id)}');location.hash='#/serve'">Serve this run</button>`
         : `<button class="btn btn-primary" disabled aria-disabled="true">Serve this run</button>`}
@@ -1546,6 +1552,200 @@ async function renderRunDetail(runId) {
     </div>
 
     ${m.fingerprint ? `<p class="fingerprint-line">Full fingerprint: <code>${m.fingerprint}</code></p>` : ''}`;
+}
+
+// ===================================================================
+// VERIFY
+// ===================================================================
+
+let _verifyPollTimer = null;
+
+async function renderVerify(runId) {
+  $('#main').innerHTML = '<div id="loading-state">Loading…</div>';
+
+  let orig, snap;
+  try {
+    orig = await api(`/api/runs/${encodeURIComponent(runId)}`);
+  } catch (e) {
+    $('#main').innerHTML = `<div style="padding:24px;color:var(--fail)">${e.message}</div>`;
+    return;
+  }
+
+  try { snap = await api('/api/verify/status'); } catch (_) { snap = { status: 'idle' }; }
+
+  // If a different run is being verified, treat as idle for this run.
+  if (snap.run_id && snap.run_id !== orig.run_id) snap = { status: 'idle' };
+
+  buildVerifyView(orig, snap);
+
+  if (snap.status === 'running') startVerifyPoll(orig);
+}
+
+function buildVerifyView(orig, snap) {
+  clearVerifyPoll();
+
+  const origCard = `
+    <div class="card" style="margin-bottom:0">
+      <div class="card-title">Run to verify</div>
+      <table class="kv">
+        ${kvRows([
+          ['run_id',   `<a href="#/run/${escHtml(orig.run_id)}" class="mono">${escHtml(orig.run_id)}</a>`],
+          ['status',   badge(orig.status)],
+          ['metrics',  metricsCell(orig.outputs?.metrics) || '—'],
+          ['fp',       orig.fingerprint ? orig.fingerprint.slice(0, 16) + '…' : '—'],
+        ])}
+      </table>
+    </div>`;
+
+  let statusCard = '';
+  if (snap.status === 'idle') {
+    statusCard = `
+      <div class="card" style="margin-bottom:0">
+        <div class="card-title" style="margin-bottom:8px">Verify reproducibility</div>
+        <p style="font-size:13px;color:var(--fg2);margin-bottom:14px">
+          Re-trains the model from the run's code snapshot using the original seed, Python
+          and runner. Compares the fingerprint and metrics within tolerance 1e-6.
+        </p>
+        <button class="btn btn-primary" onclick="_startVerify('${escHtml(orig.run_id)}')">
+          Start verification
+        </button>
+      </div>`;
+  } else if (snap.status === 'running') {
+    const phase = snap.new_run_id ? 'Re-training…' : 'Building environment…';
+    statusCard = `
+      <div class="card" style="margin-bottom:0" id="verify-status-card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <div>
+            <div class="card-title" style="margin-bottom:4px" id="verify-phase">${phase}</div>
+            <div style="font-size:12px;color:var(--fg3)" id="verify-run-id">
+              ${snap.new_run_id
+                ? `<span class="mono">${escHtml(snap.new_run_id)}</span>`
+                : '<span style="color:var(--fg3)">new run will appear after environment is ready</span>'}
+            </div>
+          </div>
+          <button class="btn btn-ghost" onclick="cancelVerify()"
+            style="border-color:var(--fail);color:var(--fail);flex-shrink:0">Cancel</button>
+        </div>
+        <div class="log-section">
+          <h4 id="verify-log-label">${snap.new_run_id ? 'train.log' : 'build.log'}</h4>
+          <div class="log-block" id="verify-log-block">(waiting for output…)</div>
+        </div>
+      </div>`;
+  } else if (snap.status === 'done' && snap.result) {
+    const r = snap.result;
+    const reproduced = r.reproduced;
+    const color = reproduced ? 'var(--success)' : 'var(--fail)';
+    const icon  = reproduced ? '✓' : '✗';
+    const label = reproduced ? 'Reproduced' : 'Diverged';
+
+    let diffHtml = '';
+    if (!r.fingerprint_match) {
+      diffHtml += `<p style="font-size:13px;margin-top:8px">
+        fingerprint: <code>${(r.orig_fingerprint || '').slice(0,8)}</code>
+        ≠ <code>${(r.new_fingerprint || '').slice(0,8)}</code></p>`;
+    }
+    (r.metric_diffs || []).forEach(d => {
+      diffHtml += `<p style="font-size:13px;margin-top:4px;font-family:var(--mono)">${escHtml(d)}</p>`;
+    });
+
+    statusCard = `
+      <div class="card" style="border-color:${color};margin-bottom:0">
+        <div class="card-title" style="color:${color}">${icon} ${label}</div>
+        ${diffHtml}
+        <p style="font-size:13px;margin-top:12px">
+          Verification run:
+          <a href="#/run/${escHtml(snap.new_run_id)}" class="mono">${escHtml(snap.new_run_id)}</a>
+        </p>
+        <div style="display:flex;gap:10px;margin-top:12px">
+          <a href="#/run/${escHtml(snap.new_run_id)}" class="btn btn-secondary">View verification run</a>
+          <button class="btn btn-ghost" onclick="_startVerify('${escHtml(orig.run_id)}')">Run again</button>
+        </div>
+      </div>`;
+  } else if (snap.status === 'failed') {
+    statusCard = `
+      <div class="card" style="border-color:var(--fail);margin-bottom:0">
+        <div class="card-title" style="color:var(--fail)">Verification failed</div>
+        <p style="font-size:13px;color:var(--fg2);margin-bottom:12px">${escHtml(snap.error || 'Unknown error')}</p>
+        <button class="btn btn-secondary" onclick="_startVerify('${escHtml(orig.run_id)}')">Try again</button>
+      </div>`;
+  }
+
+  $('#main').innerHTML = `
+    <a href="#/run/${escHtml(orig.run_id)}" class="back-btn">← Run detail</a>
+    <h1 class="page-title">Verify</h1>
+    <p class="page-sub">Re-train from the run's snapshot and check reproducibility.</p>
+    <div class="detail-grid">
+      ${origCard}
+      ${statusCard}
+    </div>`;
+
+  if (snap.status === 'running') startVerifyPoll(orig);
+}
+
+async function _startVerify(runId) {
+  try {
+    await fetch(`/api/verify/${encodeURIComponent(runId)}`, { method: 'POST' });
+    const snap = await api('/api/verify/status');
+    const orig = await api(`/api/runs/${encodeURIComponent(runId)}`);
+    buildVerifyView(orig, snap);
+  } catch (e) {
+    alert(`Failed to start verification: ${e.message}`);
+  }
+}
+
+async function cancelVerify() {
+  const confirmed = await showModal({
+    title: 'Cancel verification',
+    body: 'The verification run will be marked as failed.',
+    confirmLabel: 'Cancel verification',
+    danger: true,
+  });
+  if (!confirmed) return;
+  try { await fetch('/api/verify', { method: 'DELETE' }); } catch (_) {}
+  const snap = await api('/api/verify/status');
+  const orig = await api(`/api/runs/${encodeURIComponent(snap.run_id)}`);
+  buildVerifyView(orig, snap);
+}
+
+function startVerifyPoll(orig) {
+  _verifyPollTimer = setInterval(async () => {
+    try {
+      const snap = await api('/api/verify/status');
+
+      if (snap.status !== 'running') {
+        clearVerifyPoll();
+        buildVerifyView(orig, snap);
+        return;
+      }
+
+      const phaseEl  = $('#verify-phase');
+      const runIdEl  = $('#verify-run-id');
+      const labelEl  = $('#verify-log-label');
+      const logBlock = $('#verify-log-block');
+      const building = !snap.new_run_id;
+
+      if (phaseEl) phaseEl.textContent = building ? 'Building environment…' : 'Re-training…';
+      if (runIdEl && snap.new_run_id) {
+        runIdEl.innerHTML = `<span class="mono">${escHtml(snap.new_run_id)}</span>`;
+      }
+      if (labelEl) labelEl.textContent = building ? 'build.log' : 'train.log';
+      if (logBlock) {
+        try {
+          const url = building
+            ? '/api/build/log?tail=40'
+            : `/api/runs/${encodeURIComponent(snap.new_run_id)}/log?tail=40`;
+          const logData = await api(url);
+          const lines = logData.lines || [];
+          logBlock.textContent = lines.length ? lines.join('\n') : '(no output yet)';
+          logBlock.scrollTop = logBlock.scrollHeight;
+        } catch (_) {}
+      }
+    } catch (_) {}
+  }, 5000);
+}
+
+function clearVerifyPoll() {
+  if (_verifyPollTimer) { clearInterval(_verifyPollTimer); _verifyPollTimer = null; }
 }
 
 // ===================================================================

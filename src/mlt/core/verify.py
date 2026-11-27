@@ -40,6 +40,7 @@ def verify_run(
     data_dir: Path | None = None,
     runner: str | None = None,
     on_progress: Callable[[str], None] | None = None,
+    on_runner_created: Callable | None = None,
 ) -> VerifyResult:
     """Re-train from a run's snapshot and check reproducibility.
 
@@ -124,6 +125,7 @@ def verify_run(
         env=os.environ,
         verification_of=orig.run_id,
         _store_project_dir=project_dir,
+        on_runner_created=on_runner_created,
     )
 
     new_m = store.get_run(new_run_id)

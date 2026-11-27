@@ -197,6 +197,76 @@ class _ServeState:
             }
 
 
+class _VerifyState:
+    """Thread-safe state for a single in-progress verification job."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self.run_id: str | None = None        # run being verified
+        self.new_run_id: str | None = None    # new run created by verify
+        self.status: str = "idle"             # idle | running | done | failed
+        self.error: str | None = None
+        self.result: dict | None = None       # VerifyResult fields on completion
+        self._thread: threading.Thread | None = None
+        self._runner = None
+
+    def start(self, project_dir: Path, run_id: str) -> None:
+        with self._lock:
+            if self.status == "running":
+                raise RuntimeError("A verification job is already running.")
+            self.run_id = run_id
+            self.new_run_id = None
+            self.error = None
+            self.result = None
+            self.status = "running"
+
+        def _run() -> None:
+            try:
+                from mlt.core.verify import verify_run
+                r = verify_run(
+                    project_dir=project_dir,
+                    run_id=run_id,
+                    on_runner_created=lambda runner: setattr(self, "_runner", runner),
+                )
+                with self._lock:
+                    if self.status != "failed":
+                        self.new_run_id = r.new_run_id
+                        self.result = {
+                            "reproduced":        r.reproduced,
+                            "fingerprint_match": r.fingerprint_match,
+                            "metric_diffs":      r.metric_diffs,
+                            "orig_fingerprint":  r.orig_fingerprint,
+                            "new_fingerprint":   r.new_fingerprint,
+                            "effective_runner":  r.effective_runner,
+                            "effective_python":  r.effective_python,
+                            "effective_seed":    r.effective_seed,
+                        }
+                        self.status = "done"
+            except Exception as exc:
+                with self._lock:
+                    if self.status != "failed":
+                        self.error = str(exc)
+                        self.status = "failed"
+
+        self._thread = threading.Thread(target=_run, daemon=True)
+        self._thread.start()
+
+    def cancel(self) -> None:
+        runner = self._runner
+        if runner is not None:
+            runner.terminate()
+
+    def snapshot(self) -> dict:
+        with self._lock:
+            return {
+                "status":     self.status,
+                "run_id":     self.run_id,
+                "new_run_id": self.new_run_id,
+                "error":      self.error,
+                "result":     self.result,
+            }
+
+
 def _not_found(exc: MltError) -> HTTPException:
     return HTTPException(status_code=404, detail=str(exc))
 
@@ -205,6 +275,7 @@ def create_ui_app(project_dir: Path) -> FastAPI:
     """Return a FastAPI app bound to *project_dir*."""
     app = FastAPI(title="mlt UI", docs_url=None, redoc_url=None)
     _train = _TrainState()
+    _verify = _VerifyState()
     _serve = _ServeState()
 
     # Reconcile any runs left in 'running' by a previous server session.
@@ -404,6 +475,36 @@ def create_ui_app(project_dir: Path) -> FastAPI:
         with _train._lock:
             _train.status = "failed"
             _train.error  = "Cancelled by user."
+        return {"cancelled": True}
+
+    # ------------------------------------------------------------------
+    # Verify (reproducibility check)
+    # ------------------------------------------------------------------
+
+    @app.post("/api/verify/{run_id}")
+    def start_verify(run_id: str):
+        """Start a verification job for a succeeded run."""
+        try:
+            _verify.start(project_dir, run_id)
+        except RuntimeError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        return {"started": True}
+
+    @app.get("/api/verify/status")
+    def verify_status():
+        """Return the current verification state."""
+        return _verify.snapshot()
+
+    @app.delete("/api/verify")
+    def cancel_verify():
+        """Request cancellation of the current verification job (best-effort)."""
+        snap = _verify.snapshot()
+        if snap["status"] != "running":
+            raise HTTPException(status_code=409, detail="No verification job in progress.")
+        _verify.cancel()
+        with _verify._lock:
+            _verify.status = "failed"
+            _verify.error  = "Cancelled by user."
         return {"cancelled": True}
 
     # ------------------------------------------------------------------
