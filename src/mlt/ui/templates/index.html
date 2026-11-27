@@ -704,15 +704,31 @@ function buildTrainView(params, trainStatus) {
   // Status / progress area
   let statusHtml = '';
   if (trainStatus.status === 'running') {
+    const phase = trainStatus.run_id ? 'Training…' : 'Building environment…';
+    const runLine = trainStatus.run_id
+      ? `<span style="font-family:var(--mono);font-size:12px">${escHtml(trainStatus.run_id)}</span>`
+      : '<span style="color:var(--fg3)">run will appear after environment is ready</span>';
     statusHtml = `
       <div class="card" id="train-status-card">
-        <div class="card-title">Training in progress…</div>
-        <p style="color:var(--fg3);font-size:13px;margin-bottom:12px">
-          Polling every 5 s — <span id="train-run-id">${trainStatus.run_id ? escHtml(trainStatus.run_id) : 'waiting for run_id…'}</span>
-        </p>
-        <button class="btn btn-secondary" onclick="cancelTrain()" style="border-color:var(--fail);color:var(--fail)">
-          Cancel training
-        </button>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <div>
+            <div class="card-title" style="margin-bottom:4px" id="train-phase">${phase}</div>
+            <div style="font-size:12px;color:var(--fg3)" id="train-run-id">${runLine}</div>
+          </div>
+          <button class="btn btn-ghost" onclick="cancelTrain()"
+            style="border-color:var(--fail);color:var(--fail);flex-shrink:0">
+            Cancel
+          </button>
+        </div>
+        ${trainStatus.run_id ? `
+        <div class="log-section" id="train-log-section">
+          <h4>train.log</h4>
+          <div class="log-block" id="train-log-block">Loading log…</div>
+        </div>` : `
+        <div class="log-section" id="train-log-section" style="display:none">
+          <h4>train.log</h4>
+          <div class="log-block" id="train-log-block"></div>
+        </div>`}
       </div>`;
   } else if (trainStatus.status === 'done' && trainStatus.run_id) {
     statusHtml = `
@@ -835,11 +851,35 @@ function startTrainPoll() {
   _trainPollTimer = setInterval(async () => {
     try {
       const status = await api('/api/train/status');
-      const runIdEl = $('#train-run-id');
-      if (runIdEl && status.run_id) runIdEl.textContent = status.run_id;
+
       if (status.status !== 'running') {
         const params = await api('/api/project/params');
         buildTrainView(params, status);
+        return;
+      }
+
+      // Update phase label and run_id line in place (avoid full re-render)
+      const phaseEl  = $('#train-phase');
+      const runIdEl  = $('#train-run-id');
+      const logSec   = $('#train-log-section');
+      const logBlock = $('#train-log-block');
+
+      if (phaseEl) phaseEl.textContent = status.run_id ? 'Training…' : 'Building environment…';
+
+      if (runIdEl && status.run_id) {
+        runIdEl.innerHTML = `<span style="font-family:var(--mono);font-size:12px">${escHtml(status.run_id)}</span>`;
+      }
+
+      // Show log section once run_id is available
+      if (status.run_id && logSec && logBlock) {
+        logSec.style.display = '';
+        try {
+          const logData = await api(`/api/runs/${encodeURIComponent(status.run_id)}/log?tail=40`);
+          const lines = logData.lines || [];
+          logBlock.textContent = lines.length ? lines.join('\n') : '(no output yet)';
+          // Auto-scroll to bottom
+          logBlock.scrollTop = logBlock.scrollHeight;
+        } catch (_) {}
       }
     } catch (_) {}
   }, 5000);
