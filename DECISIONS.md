@@ -295,6 +295,8 @@ Approximate time spent per step (generation + review + correction rounds):
 
 - **Add UI tests.** The Web UI has no automated tests beyond the existing core/CLI suite. The main risk is frontend regressions (broken polling, stale state after navigation). A lightweight approach: a handful of `httpx` tests against `create_ui_app()` for the API endpoints, plus a few Playwright smoke tests for the most critical flows (start train, poll to done, navigate away).
 
+- **Support switching projects without restarting.** `create_ui_app(project_dir)` binds the server to a single project at startup; opening a different project requires restarting `mlt ui`. An "Open project" button was removed from the UI for this reason. The fix would make `project_dir` a session-level setting (stored in `.mlt/ui.state`) and add a project-picker endpoint, or run one server per project with a lightweight launcher that proxies between them.
+
 **On feature engineering and scope:**
 
 `mlt` covers the cycle from ready data to trained model to REST API. Feature engineering — building the input dataset from raw sources — is deliberately out of scope. For more complex projects, a Feature Store (Feast, Tecton, SageMaker Feature Store) would sit upstream of `mlt`: the Feature Store delivers features, `mlt` trains and serves the model.
