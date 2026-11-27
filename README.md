@@ -6,76 +6,6 @@ The scientist provides `model.py`, `requirements.txt`, and data. Everything else
 
 ---
 
-## Prerequisites
-
-| Requirement | Notes |
-|-------------|-------|
-| Python ≥ 3.10 | Host interpreter used to run `mlt` itself |
-| Docker (optional) | Primary isolation mode; without it, `mlt` falls back to venv automatically |
-| Network access on first build | Packages are downloaded once; subsequent runs use the cache |
-
----
-
-## Installation
-
-`mlt` manages isolated environments for your projects, so it should live in its own isolated environment on the host — not inside any project venv.
-
-**Recommended — via pipx (isolated, globally available):**
-
-```bash
-pipx install .
-```
-
-**Alternative — manual venv (pipx equivalent, without pipx):**
-
-```bash
-python3 -m venv ~/.local/share/mlt
-~/.local/share/mlt/bin/pip3 install .
-# add ~/.local/share/mlt/bin to your PATH (once, in ~/.bashrc or ~/.zshrc)
-export PATH="$HOME/.local/share/mlt/bin:$PATH"
-```
-
-**Development (editable, includes test deps):**
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip3 install -e ".[dev]"
-```
-
-Verify:
-
-```bash
-mlt --version
-# mlt 0.3.0
-# python 3.10.12
-# docker: available, daemon running        # docker group configured
-# docker: available, daemon not responding  # no permission / daemon down
-# docker: unavailable                       # docker not installed
-```
-
-```bash
-mlt --help
-# Usage: mlt [OPTIONS] [COMMAND] [ARGS]...
-#
-#   mlt: from reproducible training to a REST API, from Python alone.
-#
-# Options:
-#   --version  Show version, Python and Docker status, then exit.
-#   --help     Show this message and exit.
-#
-# Commands:
-#   check   Validate the project contract without training.
-#   diff    Compare two runs and show what changed.
-#   init    Create a new mlt project from a template.
-#   runs    List and inspect training runs.
-#   serve   Start the inference API for a run (foreground; Ctrl+C to stop).
-#   train   Train a model and record a run.
-#   verify  Re-train from a run's snapshot and verify reproducibility.
-```
-
----
-
 ## Quickstart — end to end in 6 steps
 
 ### Step 1 — Create a project from the iris template
@@ -195,6 +125,76 @@ curl -s -X POST http://127.0.0.1:8000/predict \
 ```
 
 Swagger UI with an interactive editor is available at `http://127.0.0.1:8000/docs`.
+
+---
+
+## Prerequisites
+
+| Requirement | Notes |
+|-------------|-------|
+| Python ≥ 3.10 | Host interpreter used to run `mlt` itself |
+| Docker (optional) | Primary isolation mode; without it, `mlt` falls back to venv automatically |
+| Network access on first build | Packages are downloaded once; subsequent runs use the cache |
+
+---
+
+## Installation
+
+`mlt` manages isolated environments for your projects, so it should live in its own isolated environment on the host — not inside any project venv.
+
+**Recommended — via pipx (isolated, globally available):**
+
+```bash
+pipx install .
+```
+
+**Alternative — manual venv (pipx equivalent, without pipx):**
+
+```bash
+python3 -m venv ~/.local/share/mlt
+~/.local/share/mlt/bin/pip3 install .
+# add ~/.local/share/mlt/bin to your PATH (once, in ~/.bashrc or ~/.zshrc)
+export PATH="$HOME/.local/share/mlt/bin:$PATH"
+```
+
+**Development (editable, includes test deps):**
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip3 install -e ".[dev]"
+```
+
+Verify:
+
+```bash
+mlt --version
+# mlt 0.3.0
+# python 3.10.12
+# docker: available, daemon running        # docker group configured
+# docker: available, daemon not responding  # no permission / daemon down
+# docker: unavailable                       # docker not installed
+```
+
+```bash
+mlt --help
+# Usage: mlt [OPTIONS] [COMMAND] [ARGS]...
+#
+#   mlt: from reproducible training to a REST API, from Python alone.
+#
+# Options:
+#   --version  Show version, Python and Docker status, then exit.
+#   --help     Show this message and exit.
+#
+# Commands:
+#   check   Validate the project contract without training.
+#   diff    Compare two runs and show what changed.
+#   init    Create a new mlt project from a template.
+#   runs    List and inspect training runs.
+#   serve   Start the inference API for a run (foreground; Ctrl+C to stop).
+#   train   Train a model and record a run.
+#   verify  Re-train from a run's snapshot and verify reproducibility.
+```
 
 ---
 
