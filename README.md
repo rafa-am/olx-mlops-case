@@ -68,7 +68,7 @@ Suggested steps:
 
 > On subsequent runs with the same inputs, `mlt train` returns immediately and prints the existing run ID — no redundant retraining.
 
-Add `--verbose` to stream `train.log` to the terminal in real time (pip output, `fit()` prints, etc.); without it, the log is saved to `.mlt/runs/<run_id>/train.log` but not shown.
+Add `--verbose` to stream build and training logs to the terminal in real time (pip output, `fit()` prints, etc.); without it, the logs are saved to the run directory but not shown. `mlt verify` also accepts `--verbose` with the same behaviour.
 
 The run is stored under `<project>/.mlt/runs/`. See [Directory layout](#directory-layout) for what it contains.
 
