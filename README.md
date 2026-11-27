@@ -469,7 +469,7 @@ The following flows are designed but not yet implemented:
 - `serve --detach`, `mlt ps`, `mlt stop`, `mlt logs`: background serving with process management
 - `blank` template: `MLModel` skeleton for non-sklearn frameworks
 - `--json` output flag on all commands
-- `runs list --status` filter
+- `runs list --status` filter (CLI flag; the Web UI already filters by status)
 
 ---
 
