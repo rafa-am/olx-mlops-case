@@ -679,14 +679,16 @@ let _trainPollTimer = null;
 async function renderTrain() {
   $('#main').innerHTML = '<div id="loading-state">Loading…</div>';
 
-  // Load settings + params + current train status in parallel
-  const [settingsRes, paramsRes, statusRes] = await Promise.allSettled([
+  // Load settings + params + current train status + system in parallel
+  const [settingsRes, paramsRes, statusRes, systemRes] = await Promise.allSettled([
     S.settings ? Promise.resolve(S.settings) : api('/api/project/settings'),
     api('/api/project/params'),
     api('/api/train/status'),
+    S.system   ? Promise.resolve(S.system)   : api('/api/system'),
   ]);
 
   if (settingsRes.status === 'fulfilled') S.settings = settingsRes.value;
+  if (systemRes.status  === 'fulfilled') S.system   = systemRes.value;
   const params = paramsRes.status === 'fulfilled' ? paramsRes.value : {};
   const trainStatus = statusRes.status === 'fulfilled' ? statusRes.value : { status: 'idle' };
 
@@ -712,10 +714,16 @@ function buildTrainView(params, trainStatus) {
     <table class="kv" style="margin-bottom:0">
       ${kvRows([
         ['python', `${S.settings.python_requested} (${S.settings.python_source})`],
-        ['runner', S.settings.runner_display],
         ['seed',   `${S.settings.seed} (${S.settings.seed_source})`],
       ])}
     </table>` : '<p style="color:var(--fg3)">—</p>';
+
+  const runners = S.system?.runners || ['auto', 'venv', 'docker'];
+  const defaultRunner = S.settings?.runner || 'auto';
+  const runnerPills = runners.map(r =>
+    `<span class="chip train-runner-pill ${r === defaultRunner ? 'active' : ''}"
+      data-runner="${r}" onclick="_selectTrainRunner('${r}')">${r}</span>`
+  ).join('');
 
   // Status / progress area
   let statusHtml = '';
@@ -781,6 +789,21 @@ function buildTrainView(params, trainStatus) {
     ${statusHtml}
 
     ${!running ? `
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-title" style="margin-bottom:8px">Run options</div>
+      <div style="display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start">
+        <div>
+          <div style="font-size:12px;color:var(--fg3);margin-bottom:6px">Runner</div>
+          <div class="filter-chips" style="margin-bottom:0">${runnerPills}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;padding-top:22px">
+          <input type="checkbox" id="force-checkbox" ${running ? 'disabled' : ''}>
+          <label for="force-checkbox" style="font-size:13px;cursor:pointer">
+            Force re-train even if an identical run exists
+          </label>
+        </div>
+      </div>
+    </div>
     <div style="display:flex;gap:10px;align-items:center">
       <button class="btn btn-primary" id="start-train-btn" onclick="confirmTrain()">
         Start training
@@ -802,8 +825,19 @@ function collectParams() {
   return result;
 }
 
+function _selectTrainRunner(r) {
+  $$('.train-runner-pill').forEach(el => el.classList.toggle('active', el.dataset.runner === r));
+}
+
+function _selectedTrainRunner() {
+  const active = $('.train-runner-pill.active');
+  return active ? active.dataset.runner : (S.settings?.runner || 'auto');
+}
+
 async function confirmTrain() {
   const params = collectParams();
+  const runner = _selectedTrainRunner();
+  const force  = !!($('#force-checkbox')?.checked);
   const paramsPreview = Object.keys(params).length
     ? Object.entries(params).map(([k, v]) => `${k}: ${v}`).join('\n')
     : null;
@@ -825,11 +859,12 @@ async function confirmTrain() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-      params,
-      runner: S.settings?.runner || 'auto',
-      python: S.settings?.python_requested || null,
-      seed:   S.settings?.seed ?? null,
-    }),
+        params,
+        runner,
+        force,
+        python: S.settings?.python_requested || null,
+        seed:   S.settings?.seed ?? null,
+      }),
     });
     // Re-render immediately so the status card appears
     const status = await api('/api/train/status');
@@ -1152,20 +1187,50 @@ async function doPredict() {
 }
 
 async function confirmStartServe(runId) {
-  const ok = await showModal({
-    title: 'Start service',
-    body:  `Serve run ${runId} on port 8000?`,
-    confirmLabel: 'Start',
-  });
-  if (!ok) return;
+  const defaultPort = S.system?.default_port || 8000;
+  const port = await _promptPort(defaultPort);
+  if (port === null) return;
   try {
     await fetch('/api/serve', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ run_id: runId, port: 8000 }),
+      body: JSON.stringify({ run_id: runId, port }),
     });
   } catch (_) {}
   renderServe();
+}
+
+function _promptPort(defaultPort) {
+  return new Promise(resolve => {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+      <div class="modal" role="dialog" aria-modal="true">
+        <h3>Start service</h3>
+        <p>Port to listen on:</p>
+        <input type="number" id="serve-port-input" value="${defaultPort}"
+          min="1" max="65535" style="margin-top:8px;width:120px">
+        <div class="modal-actions">
+          <button class="btn btn-ghost" id="modal-cancel">Cancel</button>
+          <button class="btn btn-primary" id="modal-confirm">Start</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    const inp = overlay.querySelector('#serve-port-input');
+    inp.focus(); inp.select();
+    const cleanup = (val) => { overlay.remove(); resolve(val); };
+    overlay.querySelector('#modal-confirm').addEventListener('click', () => {
+      const p = parseInt(inp.value, 10);
+      cleanup(p > 0 && p < 65536 ? p : defaultPort);
+    });
+    overlay.querySelector('#modal-cancel').addEventListener('click', () => cleanup(null));
+    overlay.addEventListener('click', e => { if (e.target === overlay) cleanup(null); });
+    const onKey = e => {
+      if (e.key === 'Escape') { cleanup(null); document.removeEventListener('keydown', onKey); }
+      if (e.key === 'Enter')  { overlay.querySelector('#modal-confirm').click(); }
+    };
+    document.addEventListener('keydown', onKey);
+  });
 }
 
 async function confirmStopServe() {
@@ -1597,15 +1662,26 @@ function buildVerifyView(orig, snap) {
       </table>
     </div>`;
 
+  const origRunner = orig.environment?.runner || 'auto';
+  const verifyRunners = S.system?.runners || ['auto', 'venv', 'docker'];
+  const verifyRunnerPills = verifyRunners.map(r =>
+    `<span class="chip verify-runner-pill ${r === origRunner ? 'active' : ''}"
+      data-runner="${r}" onclick="_selectVerifyRunner('${r}')">${r}</span>`
+  ).join('');
+
   let statusCard = '';
   if (snap.status === 'idle') {
     statusCard = `
       <div class="card" style="margin-bottom:0">
         <div class="card-title" style="margin-bottom:8px">Verify reproducibility</div>
         <p style="font-size:13px;color:var(--fg2);margin-bottom:14px">
-          Re-trains the model from the run's code snapshot using the original seed, Python
-          and runner. Compares the fingerprint and metrics within tolerance 1e-6.
+          Re-trains the model from the run's code snapshot using the original seed and Python.
+          Compares the fingerprint and metrics (fixed relative tolerance).
         </p>
+        <div style="font-size:12px;color:var(--fg3);margin-bottom:6px">
+          Runner <span style="color:var(--fg3);font-weight:400">(default: same as original — <code>${escHtml(origRunner)}</code>)</span>
+        </div>
+        <div class="filter-chips" style="margin-bottom:16px">${verifyRunnerPills}</div>
         <button class="btn btn-primary" onclick="_startVerify('${escHtml(orig.run_id)}')">
           Start verification
         </button>
@@ -1682,9 +1758,19 @@ function buildVerifyView(orig, snap) {
   if (snap.status === 'running') startVerifyPoll(orig);
 }
 
+function _selectVerifyRunner(r) {
+  $$('.verify-runner-pill').forEach(el => el.classList.toggle('active', el.dataset.runner === r));
+}
+
 async function _startVerify(runId) {
+  const active = $('.verify-runner-pill.active');
+  const runner = active ? active.dataset.runner : null;
   try {
-    await fetch(`/api/verify/${encodeURIComponent(runId)}`, { method: 'POST' });
+    await fetch(`/api/verify/${encodeURIComponent(runId)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ runner }),
+    });
     const snap = await api('/api/verify/status');
     const orig = await api(`/api/runs/${encodeURIComponent(runId)}`);
     buildVerifyView(orig, snap);

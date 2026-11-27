@@ -29,6 +29,12 @@ from mlt.core.diff import diff_runs_by_id
 from mlt.core.errors import MltError
 from mlt.core.runs import describe_run, list_runs
 
+# Single source of truth for defaults shared with the frontend via /api/system.
+# Keep in sync with CLI defaults in train_cmd.py and serve_cmd.py.
+_DEFAULT_PORT = 8000
+_DEFAULT_TIMEOUT = 600
+_RUNNERS = ["auto", "venv", "docker"]
+
 
 def _docker_status() -> str:
     """Return 'available' or 'unavailable' (matches sidebar mock label)."""
@@ -58,6 +64,8 @@ class _TrainState:
         python: str | None,
         seed: int | None,
         env: dict,
+        force: bool = False,
+        timeout: int = _DEFAULT_TIMEOUT,
     ) -> None:
         with self._lock:
             if self.status == "running":
@@ -77,8 +85,8 @@ class _TrainState:
                     runner=runner,
                     python=python,
                     seed=seed,
-                    timeout=600,
-                    force=False,
+                    timeout=timeout,
+                    force=force,
                     env=env,
                     on_runner_created=lambda r: setattr(self, "_runner", r),
                 )
@@ -210,7 +218,7 @@ class _VerifyState:
         self._thread: threading.Thread | None = None
         self._runner = None
 
-    def start(self, project_dir: Path, run_id: str) -> None:
+    def start(self, project_dir: Path, run_id: str, runner: str | None = None) -> None:
         with self._lock:
             if self.status == "running":
                 raise RuntimeError("A verification job is already running.")
@@ -226,7 +234,8 @@ class _VerifyState:
                 r = verify_run(
                     project_dir=project_dir,
                     run_id=run_id,
-                    on_runner_created=lambda runner: setattr(self, "_runner", runner),
+                    runner=runner,
+                    on_runner_created=lambda r: setattr(self, "_runner", r),
                 )
                 with self._lock:
                     if self.status != "failed":
@@ -299,10 +308,13 @@ def create_ui_app(project_dir: Path) -> FastAPI:
 
     @app.get("/api/system")
     def system():
-        """Host system info: docker status and server Python version."""
+        """Host system info, UI defaults and available runners."""
         return {
-            "docker": _docker_status(),
-            "python": sys.version.split()[0],
+            "docker":          _docker_status(),
+            "python":          sys.version.split()[0],
+            "runners":         _RUNNERS,
+            "default_port":    _DEFAULT_PORT,
+            "default_timeout": _DEFAULT_TIMEOUT,
         }
 
     @app.get("/api/project")
@@ -419,6 +431,7 @@ def create_ui_app(project_dir: Path) -> FastAPI:
         runner = body.get("runner", "auto")
         python = body.get("python") or None   # e.g. "3.11", None → use default
         seed   = body.get("seed")             # int or None
+        force  = bool(body.get("force", False))
 
         # Write params.yaml before training (matches CLI behaviour).
         p = project_dir / "params.yaml"
@@ -431,6 +444,7 @@ def create_ui_app(project_dir: Path) -> FastAPI:
                 python=python,
                 seed=int(seed) if seed is not None else None,
                 env=dict(os.environ),
+                force=force,
             )
         except RuntimeError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
@@ -482,10 +496,13 @@ def create_ui_app(project_dir: Path) -> FastAPI:
     # ------------------------------------------------------------------
 
     @app.post("/api/verify/{run_id}")
-    def start_verify(run_id: str):
+    async def start_verify(run_id: str, request: Request):
         """Start a verification job for a succeeded run."""
+        ct   = request.headers.get("content-type", "")
+        body = await request.json() if "application/json" in ct else {}
+        runner = body.get("runner") or None  # None → use original run's runner
         try:
-            _verify.start(project_dir, run_id)
+            _verify.start(project_dir, run_id, runner=runner)
         except RuntimeError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         return {"started": True}
