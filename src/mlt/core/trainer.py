@@ -63,6 +63,7 @@ def train(
     env: Mapping[str, str] | None = None,
     on_slow_build: "Callable[[], None] | None" = None,
     on_runner_created: "Callable | None" = None,
+    on_step: "Callable[[str], None] | None" = None,
     verification_of: str | None = None,
     _store_project_dir: Path | None = None,
 ) -> str:
@@ -79,6 +80,7 @@ def train(
     force:        Re-train even if an identical run already exists.
     env:          Environment mapping for seed resolution (defaults to os.environ).
     on_slow_build: Called when the environment build is known to be slow.
+    on_step:      Called with a step name each time a new phase begins.
     """
     import os
 
@@ -88,10 +90,17 @@ def train(
     project_dir = Path(project_dir).resolve()
     store_project_dir = Path(_store_project_dir).resolve() if _store_project_dir else project_dir
 
+    def _step(name: str) -> None:
+        # Step names must stay in sync with _TRAIN_STEPS in mlt/ui/app.py.
+        if on_step:
+            on_step(name)
+
     # 1. Static validation -------------------------------------------------
+    _step("validate_contract")
     validate_contract(project_dir)
 
     # 2. Resolve seed and Python -------------------------------------------
+    _step("resolve_environment")
     seed_val, seed_origin = resolve_seed(seed, env)
     python_minor, python_requested, python_source = resolve_python(project_dir, python)
 
@@ -99,12 +108,14 @@ def train(
     _check_python_compat(python_minor, python_requested, python_source, runner)
 
     # 3. Load params and check data ----------------------------------------
+    _step("check_data")
     params = _load_params(project_dir)
     effective_data_dir = data_dir if data_dir is not None else project_dir / "data"
     datasource = LocalDataSource(effective_data_dir)
     datasource.check()
 
     # 4. Calculate input hashes and fingerprint ----------------------------
+    _step("compute_fingerprint")
     data_name = Path(effective_data_dir).name
     # Exclude data dir name only if it is a direct child of project_dir.
     extra_exclude: set[str] = set()
@@ -138,6 +149,7 @@ def train(
     build_log_path = mlt_dir / "build.log"
     build_log_path.unlink(missing_ok=True)  # fresh log for this attempt
 
+    _step("build_environment")
     req_txt = project_dir / "requirements.txt"
     runner_instance = _create_runner(runner, req_txt, python_minor)
     if on_runner_created:
@@ -150,6 +162,7 @@ def train(
     eh = runner_instance.get_env_hash()
 
     # 7. Create run --------------------------------------------------------
+    _step("create_run")
     run_id = _new_run_id()
     partial = Manifest.new(
         run_id=run_id,
@@ -191,6 +204,7 @@ def train(
     _fcntl.flock(_lock_fd.fileno(), _fcntl.LOCK_EX)
 
     # 9. Execute training --------------------------------------------------
+    _step("execute_training")
     try:
         exit_code = runner_instance.run_training(
             run_dir=run_dir,

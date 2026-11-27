@@ -35,6 +35,18 @@ _DEFAULT_PORT = 8000
 _DEFAULT_TIMEOUT = 600
 _RUNNERS = ["auto", "venv", "docker"]
 
+# Training steps in execution order.
+# Must stay in sync with _step() calls in mlt/core/trainer.py.
+_TRAIN_STEPS = [
+    ("validate_contract",   "Validate contract"),
+    ("resolve_environment", "Resolve environment"),
+    ("check_data",          "Check data"),
+    ("compute_fingerprint", "Compute fingerprint"),
+    ("build_environment",   "Build environment"),
+    ("create_run",          "Create run"),
+    ("execute_training",    "Execute training"),
+]
+
 
 def _docker_status() -> str:
     """Return 'available' or 'unavailable' (matches sidebar mock label)."""
@@ -53,9 +65,34 @@ class _TrainState:
         self.run_id: str | None = None
         self.status: str = "idle"   # idle | running | done | failed
         self.error: str | None = None
+        self.steps: list = []       # [{name, label, status}]
         self._thread: threading.Thread | None = None
         self._cancel_event = threading.Event()
         self._runner = None  # set once train() creates the runner
+
+    def _init_steps(self) -> None:
+        self.steps = [
+            {"name": name, "label": label, "status": "pending"}
+            for name, label in _TRAIN_STEPS
+        ]
+
+    def _on_step(self, name: str) -> None:
+        with self._lock:
+            for s in self.steps:
+                if s["status"] == "running":
+                    s["status"] = "done"
+            for s in self.steps:
+                if s["name"] == name:
+                    s["status"] = "running"
+                    break
+
+    def _finish_steps(self, failed_step: str | None = None) -> None:
+        with self._lock:
+            for s in self.steps:
+                if s["status"] == "running":
+                    s["status"] = "failed" if failed_step else "done"
+                elif s["status"] == "pending" and failed_step:
+                    break  # leave remaining steps pending
 
     def start(
         self,
@@ -74,6 +111,7 @@ class _TrainState:
             self.error = None
             self.status = "running"
             self._cancel_event.clear()
+            self._init_steps()
 
         def _run() -> None:
             try:
@@ -89,13 +127,16 @@ class _TrainState:
                     force=force,
                     env=env,
                     on_runner_created=lambda r: setattr(self, "_runner", r),
+                    on_step=self._on_step,
                 )
+                self._finish_steps()
                 with self._lock:
                     # Don't overwrite an explicit cancel (status already "failed").
                     if self.status != "failed":
                         self.run_id = run_id
                         self.status = "done"
             except Exception as exc:
+                self._finish_steps(failed_step="current")
                 with self._lock:
                     # Preserve the user-facing "Cancelled by user." message if
                     # the exception was triggered by our own terminate() call.
@@ -119,6 +160,7 @@ class _TrainState:
                 "status": self.status,
                 "run_id": self.run_id,
                 "error":  self.error,
+                "steps":  list(self.steps),
             }
 
 
@@ -315,6 +357,7 @@ def create_ui_app(project_dir: Path) -> FastAPI:
             "runners":         _RUNNERS,
             "default_port":    _DEFAULT_PORT,
             "default_timeout": _DEFAULT_TIMEOUT,
+            "train_steps":     [{"name": name, "label": label} for name, label in _TRAIN_STEPS],
         }
 
     @app.get("/api/project")

@@ -676,6 +676,23 @@ function showModal({ title, body, pre, confirmLabel = 'Confirm', danger = false 
 // ===================================================================
 let _trainPollTimer = null;
 
+function _renderSteps(steps) {
+  if (!steps || !steps.length) return '';
+  const icons = { pending: '○', running: '▶', done: '✓', failed: '✗' };
+  const colors = {
+    pending: 'var(--fg3)',
+    running: 'var(--warn)',
+    done:    'var(--success)',
+    failed:  'var(--fail)',
+  };
+  return `<div style="display:flex;flex-wrap:wrap;gap:6px 20px">` +
+    steps.map(s => `
+      <span style="font-size:12px;color:${colors[s.status] || 'var(--fg3)'}">
+        ${icons[s.status] || '○'} ${escHtml(s.label)}
+      </span>`).join('') +
+    `</div>`;
+}
+
 async function renderTrain() {
   $('#main').innerHTML = '<div id="loading-state">Loading…</div>';
 
@@ -742,6 +759,9 @@ function buildTrainView(params, trainStatus) {
             style="border-color:var(--fail);color:var(--fail);flex-shrink:0">
             Cancel
           </button>
+        </div>
+        <div id="train-steps-list" style="margin-bottom:14px">
+          ${_renderSteps(trainStatus.steps)}
         </div>
         <div class="log-section" id="train-log-section">
           <h4 id="train-log-label">${trainStatus.run_id ? 'train.log' : 'build.log'}</h4>
@@ -913,14 +933,16 @@ function startTrainPoll() {
         return;
       }
 
-      // Update phase label and run_id line in place (avoid full re-render)
+      // Update phase label, steps and run_id line in place (avoid full re-render)
       const phaseEl  = $('#train-phase');
       const runIdEl  = $('#train-run-id');
+      const stepsEl  = $('#train-steps-list');
       const logSec   = $('#train-log-section');
       const logBlock = $('#train-log-block');
 
       const building = !status.run_id;
       if (phaseEl) phaseEl.textContent = building ? 'Building environment…' : 'Training…';
+      if (stepsEl && status.steps) stepsEl.innerHTML = _renderSteps(status.steps);
 
       if (runIdEl && status.run_id) {
         runIdEl.innerHTML = `<span style="font-family:var(--mono);font-size:12px">${escHtml(status.run_id)}</span>`;
