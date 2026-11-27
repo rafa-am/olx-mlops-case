@@ -87,6 +87,7 @@ from mlt.cli.init_cmd import init_cmd  # noqa: E402
 from mlt.cli.runs_cmd import runs_cmd  # noqa: E402
 from mlt.cli.serve_cmd import serve_cmd  # noqa: E402
 from mlt.cli.train_cmd import train_cmd  # noqa: E402
+from mlt.cli.ui_cmd import ui_cmd  # noqa: E402
 from mlt.cli.verify_cmd import verify_cmd  # noqa: E402
 
 cli.add_command(init_cmd)
@@ -96,6 +97,7 @@ cli.add_command(runs_cmd)
 cli.add_command(diff_cmd)
 cli.add_command(verify_cmd)
 cli.add_command(serve_cmd)
+cli.add_command(ui_cmd)
 
 
 def main() -> None:

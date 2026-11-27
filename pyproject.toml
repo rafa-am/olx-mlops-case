@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mlt"
-version = "0.1.0"
+version = "0.3.0"
 description = "From reproducible training to a REST API, from Python alone."
 requires-python = ">=3.10"
 dependencies = [
@@ -33,7 +33,7 @@ dev = [
 where = ["src"]
 
 [tool.setuptools.package-data]
-"mlt" = ["templates/**/*", "templates/**/.*"]
+"mlt" = ["templates/**/*", "templates/**/.*", "ui/templates/*"]
 
 [tool.ruff]
 line-length = 100

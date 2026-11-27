@@ -33,7 +33,7 @@ src/mlt/
   runstore/                RunStore: files + SQLite
   serving/                 generic FastAPI server
   templates/iris/          scikit-learn example project, with `.python-version`, `params.yaml`, and `.gitignore` (single copy; used by `init` and by tests)
-  templates/blank/         MLModel skeleton with TODO, for other frameworks
+  templates/blank/         MLModel skeleton with TODO, for other frameworks  (planned, P2 — not implemented)
 tests/
 docs/
   design.md                this file
@@ -73,11 +73,15 @@ One page that tells the scientist what is expected of them:
 ### Minimal example (this is the `model.py` of the `iris` template)
 
 ```python
+from __future__ import annotations
+
+from pathlib import Path
+
 from mlt.model.sklearn import SklearnModel
 
 
 class Model(SklearnModel):
-    def fit(self, data_dir, params):
+    def fit(self, data_dir: Path, params: dict) -> dict[str, float]:
         import pandas as pd
         from sklearn.ensemble import RandomForestClassifier
         from sklearn.model_selection import train_test_split
@@ -94,18 +98,18 @@ class Model(SklearnModel):
         ).fit(X_tr, y_tr)
         return {"accuracy": float(self.model.score(X_te, y_te))}
 
-    def predict(self, inputs):
+    def predict(self, inputs: list[dict]) -> list:
         # SklearnModel reorders columns to match training order and calls
         # self.model.predict(). Override for custom pre/post-processing.
         return super().predict(inputs)
 
-    def save(self, path):
+    def save(self, path: Path) -> None:
         # path is a pathlib.Path; SklearnModel saves to path/model.joblib.
         # Override if your model requires a different serialisation format.
         super().save(path)
 
     @classmethod
-    def load(cls, path):
+    def load(cls, path: Path) -> "Model":
         # path is a pathlib.Path; SklearnModel loads from path/model.joblib.
         # Override if you customised save().
         return super().load(path)
@@ -176,9 +180,10 @@ Inferred schema: from `feature_names_in_` of the trained model (sklearn with Dat
 | `mlt train [folder]` | trains and records a run |
 | `mlt runs list` / `mlt runs show <run_id>` | lists and details runs (`--json` optional) |
 | `mlt diff <a> <b>` | what changed between two runs |
-| `mlt verify <run_id>` | retrains and compares; refuses if data changed |
-| `mlt serve <run_id>` (or `latest`) | starts the API (`--detach`, `--port`, `--host`) |
-| `mlt ps` / `mlt stop <run_id>` / `mlt logs <run_id>` | service management |
+| `mlt verify <run_id>` | retrains and compares; refuses if data changed; `--runner`, `--verbose` streams build and training logs |
+| `mlt serve <run_id>` (or `latest`) | starts the API in the foreground (`--port`, `--host`); `--detach` is P2, not implemented |
+| `mlt ps` / `mlt stop <run_id>` / `mlt logs <run_id>` | service management (P2, not implemented) |
+| `mlt ui [folder]` | local Web UI — experimental, v0.3.0 |
 
 Flags for `train`: `--data <folder>` (default `<project>/data/`), `--runner auto|docker|venv`, `--python 3.12` (precedence: flag, then `.python-version`, then default), `--seed N`, `--timeout 600`, `--force`, `--verbose`. (`--snapshot-data` and `--rebuild` are P2.)
 
@@ -380,7 +385,7 @@ Each step ends with passing tests and a commit. Record the time spent per step (
 
 - **P0 (without this there is no delivery):** contract and validation, training (Docker and venv), manifest and `RunStore`, `runs list/show`, `serve` with `/predict`, critical flow tests, README, and documents.
 - **P1:** `check` (static and `--deep`), `init` with `iris` template, `verify`, `diff`.
-- **P2 (cut first):** `--snapshot-data`, `serve --detach`, `ps`, `stop`, `logs`, interrupted run reconciliation, `blank` template, `--json`, `runs list --status`. The flows for each are closed below.
+- **P2 (cut first):** `--snapshot-data`, `serve --detach`, `ps`, `stop`, `logs`, `blank` template, `--json`, `runs list --status` (CLI flag). The flows for each are closed below. (Interrupted run reconciliation was implemented in `core/reconcile.py`; it runs on `mlt runs list`, `mlt runs show`, and `mlt ui` startup.)
 
 What is cut goes into `DECISIONS.md` as "not done due to time constraints".
 
@@ -401,7 +406,7 @@ Git repository accessible; README with end-to-end example; `DECISIONS.md`; `AI_U
 
 ## 17. Out of scope and evolution
 
-Out of scope: authentication, data versioning, rollback and A/B, monitoring and drift, GPU, distributed training, UI, CPU and memory limits, old run cleanup, API route versioning, data statistics in the manifest.
+Out of scope: authentication, data versioning, rollback and A/B, monitoring and drift, GPU, distributed training, CPU and memory limits, old run cleanup, API route versioning, data statistics in the manifest. (Local Web UI delivered as v0.3.0.)
 
 Evolution, in order:
 

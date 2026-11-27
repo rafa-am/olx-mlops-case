@@ -54,6 +54,24 @@ def test_hash_code_ignores_pycache(tmp_path):
     assert h1 == h2
 
 
+def test_hash_code_ignores_params_and_schema_yaml(tmp_path):
+    """params.yaml and schema.yaml must not affect code_hash (they have
+    dedicated hash components in the fingerprint, so including them in
+    code_hash would cause mlt diff to show a spurious code change whenever
+    only params or schema changed)."""
+    (tmp_path / "model.py").write_text("class Model: pass\n")
+    h1 = hash_code(tmp_path)
+
+    (tmp_path / "params.yaml").write_text("n_estimators: 100\n")
+    (tmp_path / "schema.yaml").write_text("features:\n  x: {type: float}\n")
+    h2 = hash_code(tmp_path)
+    assert h1 == h2, "code_hash must not change when params.yaml or schema.yaml is added"
+
+    (tmp_path / "params.yaml").write_text("n_estimators: 200\n")
+    h3 = hash_code(tmp_path)
+    assert h2 == h3, "code_hash must not change when params.yaml is edited"
+
+
 def test_hash_code_respects_extra_exclude(tmp_path):
     (tmp_path / "model.py").write_text("class Model: pass\n")
     data = tmp_path / "data"

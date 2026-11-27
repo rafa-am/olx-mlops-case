@@ -86,12 +86,15 @@ def test_train_seed_flag(minimal_project):
     assert "99" in r.output
 
 
-def test_train_verbose_prints_log(minimal_project):
+def test_train_verbose_streams_log(minimal_project):
+    # Verifies that the log section header appears and training succeeds.
+    # Actual streaming is exercised manually; CliRunner captures the header
+    # but thread-based output is not guaranteed in its single-threaded mode.
     p = minimal_project
     r = invoke("train", str(p["project_dir"]), "--data", str(p["data_dir"]),
                "--verbose", "--force")
     assert r.exit_code == 0
-    assert "train.log" in r.output
+    assert "--- train.log ---" in r.output
 
 
 # ---------------------------------------------------------------------------

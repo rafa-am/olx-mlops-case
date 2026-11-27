@@ -1,0 +1,2246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>mlt</title>
+<style>
+/* ================================================================
+   CSS variables: light (default) + dark override
+   ================================================================ */
+:root {
+  /* Sidebar */
+  --sb-bg:        #1b2d2a;
+  --sb-bg2:       #162522;
+  --sb-active:    #1a6b5a;
+  --sb-text:      #c8d8d4;
+  --sb-text2:     #7ea89e;
+  --sb-border:    #2a3f3b;
+
+  /* Main content */
+  --bg:           #f0f2f0;
+  --bg-card:      #ffffff;
+  --bg-hover:     #f5f7f5;
+  --fg:           #111111;
+  --fg2:          #555555;
+  --fg3:          #888888;
+  --border:       #e2e6e2;
+
+  /* Accents */
+  --accent:       #1a7a6a;
+  --accent-h:     #15614f;
+  --accent-fg:    #ffffff;
+  --link:         #1a7a6a;
+
+  /* Status */
+  --success:      #16a34a;
+  --success-bg:   #dcfce7;
+  --fail:         #dc2626;
+  --fail-bg:      #fee2e2;
+  --warn:         #d97706;
+  --warn-bg:      #fef3c7;
+  --neutral-bg:   #f3f4f6;
+  --neutral-fg:   #6b7280;
+
+  /* Misc */
+  --mono:         "SF Mono", "Fira Code", "Consolas", monospace;
+  --r:            6px;
+  --r2:           10px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg:          #0e1210;
+    --bg-card:     #1a201e;
+    --bg-hover:    #202820;
+    --fg:          #e8f0ec;
+    --fg2:         #90a89a;
+    --fg3:         #607068;
+    --border:      #2a3830;
+    --success-bg:  #052e16;
+    --fail-bg:     #3b0a0a;
+    --warn-bg:     #2d1a00;
+    --neutral-bg:  #1f2937;
+    --neutral-fg:  #9ca3af;
+  }
+}
+/* Explicit dark override (set via JS, wins over media query) */
+html.dark {
+  --bg:          #0e1210;
+  --bg-card:     #1a201e;
+  --bg-hover:    #202820;
+  --fg:          #e8f0ec;
+  --fg2:         #90a89a;
+  --fg3:         #607068;
+  --border:      #2a3830;
+  --success-bg:  #052e16;
+  --fail-bg:     #3b0a0a;
+  --warn-bg:     #2d1a00;
+  --neutral-bg:  #1f2937;
+  --neutral-fg:  #9ca3af;
+}
+/* Explicit light override */
+html.light {
+  --bg:          #f0f2f0;
+  --bg-card:     #ffffff;
+  --bg-hover:    #f5f7f5;
+  --fg:          #111111;
+  --fg2:         #555555;
+  --fg3:         #888888;
+  --border:      #e2e6e2;
+  --success-bg:  #dcfce7;
+  --fail-bg:     #fee2e2;
+  --warn-bg:     #fef3c7;
+  --neutral-bg:  #f3f4f6;
+  --neutral-fg:  #6b7280;
+}
+
+/* ================================================================
+   Reset
+   ================================================================ */
+*,*::before,*::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: var(--bg); color: var(--fg); font-size: 14px; line-height: 1.6;
+  display: flex; min-height: 100vh; }
+a { color: var(--link); text-decoration: none; }
+a:hover { text-decoration: underline; }
+code, pre, .mono { font-family: var(--mono); }
+button { cursor: pointer; font-family: inherit; font-size: 13px; }
+
+/* ================================================================
+   Sidebar
+   ================================================================ */
+#sidebar {
+  width: 210px; min-width: 210px; background: var(--sb-bg);
+  display: flex; flex-direction: column; gap: 0;
+  position: sticky; top: 0; height: 100vh; overflow-y: auto;
+}
+
+.sb-logo {
+  padding: 18px 16px 10px;
+  display: flex; align-items: baseline; gap: 6px;
+}
+.sb-logo .brand {
+  font-size: 20px; font-weight: 800; color: #e0f0ec; letter-spacing: -1px;
+  font-family: var(--mono);
+}
+.sb-logo .sub {
+  font-size: 11px; color: var(--sb-text2);
+}
+
+.sb-project {
+  margin: 0 10px 8px;
+  background: var(--sb-bg2); border-radius: var(--r);
+  padding: 8px 10px;
+}
+.sb-project .label { font-size: 10px; color: var(--sb-text2); text-transform: uppercase; letter-spacing: .5px; }
+.sb-project .path  { font-size: 12px; color: var(--sb-text); font-family: var(--mono); word-break: break-all; }
+
+nav { padding: 4px 0; flex: 1; }
+nav a {
+  display: block; padding: 9px 16px;
+  font-size: 14px; color: var(--sb-text); border-radius: 0;
+  transition: background .12s;
+}
+nav a:hover { background: rgba(255,255,255,.07); text-decoration: none; }
+nav a.active { background: var(--sb-active); color: #fff; font-weight: 500; }
+
+.sb-sep { border: none; border-top: 1px solid var(--sb-border); margin: 8px 12px; }
+
+.sb-info { padding: 8px 16px; display: flex; flex-direction: column; gap: 3px; }
+.sb-info span { font-size: 11px; color: var(--sb-text2); }
+.sb-info span b { color: var(--sb-text); font-weight: 500; }
+.sb-info .ok   { color: #4ade80; }
+.sb-info .err  { color: #f87171; }
+
+.sb-dark-row {
+  margin: 10px 10px 16px;
+  display: flex; align-items: center; gap: 8px;
+}
+.sb-dark-label { font-size: 12px; color: var(--sb-text2); }
+
+/* Toggle switch */
+.toggle { position: relative; display: inline-block; width: 36px; height: 20px; }
+.toggle input { opacity: 0; width: 0; height: 0; }
+.toggle-track {
+  position: absolute; inset: 0; border-radius: 20px;
+  background: var(--sb-border); cursor: pointer; transition: background .2s;
+}
+.toggle input:checked + .toggle-track { background: var(--accent); }
+.toggle-track::after {
+  content: ''; position: absolute; top: 3px; left: 3px;
+  width: 14px; height: 14px; border-radius: 50%;
+  background: #fff; transition: transform .2s;
+}
+.toggle input:checked + .toggle-track::after { transform: translateX(16px); }
+
+/* ================================================================
+   Main content
+   ================================================================ */
+#main { flex: 1; min-width: 0; padding: 32px 36px; }
+
+.page-title { font-size: 26px; font-weight: 700; margin-bottom: 4px; }
+.page-sub   { font-size: 13px; color: var(--fg3); margin-bottom: 24px; }
+.page-sub code { font-size: 12px; }
+
+/* ================================================================
+   Cards
+   ================================================================ */
+.card {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--r2); padding: 20px; margin-bottom: 16px;
+}
+.card-title {
+  font-size: 15px; font-weight: 700; margin-bottom: 12px;
+}
+
+/* 3-col grid for home */
+.home-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+@media (max-width: 900px) { .home-grid { grid-template-columns: 1fr; } }
+
+/* ================================================================
+   KV table inside cards
+   ================================================================ */
+.kv { width: 100%; border-collapse: collapse; }
+.kv tr td { padding: 6px 0; border-bottom: 1px solid var(--border); vertical-align: top; }
+.kv tr:last-child td { border-bottom: none; }
+.kv .k { color: var(--fg3); font-size: 13px; padding-right: 16px; white-space: nowrap; width: 110px; }
+.kv .v { color: var(--fg); font-size: 13px; font-family: var(--mono); font-size: 12px; word-break: break-all; }
+
+/* ================================================================
+   Badges
+   ================================================================ */
+.badge {
+  display: inline-block; padding: 2px 9px; border-radius: 12px;
+  font-size: 11px; font-weight: 700; text-transform: lowercase; letter-spacing: .3px;
+}
+.badge-succeeded { background: var(--success-bg); color: var(--success); }
+.badge-failed    { background: var(--fail-bg);    color: var(--fail); }
+.badge-running   { background: var(--warn-bg);    color: var(--warn); }
+.badge-cancelled { background: var(--neutral-bg); color: var(--neutral-fg); }
+.badge-v {
+  display: inline-block; font-size: 10px; font-weight: 700; color: var(--accent);
+  margin-left: 4px;
+}
+.badge-verifying {
+  display: inline-block; font-size: 10px; font-weight: 700;
+  color: var(--warn); margin-left: 6px;
+}
+
+/* ================================================================
+   Buttons
+   ================================================================ */
+.btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 7px 14px; border-radius: var(--r); font-weight: 500;
+  font-size: 13px; border: 1px solid transparent; transition: background .12s;
+  text-decoration: none;
+}
+.btn:hover { text-decoration: none; }
+.btn-primary   { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+.btn-primary:hover { background: var(--accent-h); border-color: var(--accent-h); }
+.btn-secondary { background: var(--bg-card); color: var(--fg); border-color: var(--border); }
+.btn-secondary:hover { background: var(--bg-hover); }
+.btn-ghost     { background: transparent; color: var(--fg2); border-color: var(--border); }
+.btn-ghost:hover { background: var(--bg-hover); color: var(--fg); }
+.btn:disabled, .btn[aria-disabled=true] {
+  opacity: .45; cursor: not-allowed; pointer-events: none;
+}
+
+/* ================================================================
+   Runs table
+   ================================================================ */
+.runs-topbar {
+  display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;
+}
+.runs-topbar-actions { display: flex; gap: 10px; }
+
+.filter-chips { display: flex; gap: 8px; margin-bottom: 16px; }
+.chip {
+  padding: 4px 14px; border-radius: 20px; font-size: 13px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--bg-card); color: var(--fg2);
+  transition: all .12s;
+}
+.chip:hover { border-color: var(--accent); color: var(--accent); }
+.chip.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th {
+  text-align: left; padding: 8px 12px;
+  color: var(--fg3); font-weight: 600; font-size: 11px;
+  text-transform: uppercase; letter-spacing: .5px;
+  border-bottom: 2px solid var(--border);
+}
+td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+tr:last-child td { border-bottom: none; }
+tr.clickable:hover td { background: var(--bg-hover); cursor: pointer; }
+
+.table-wrap { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--r2); overflow: hidden; }
+.table-footer { padding: 10px 16px; color: var(--fg3); font-size: 12px; border-top: 1px solid var(--border); }
+
+/* ================================================================
+   Detail page
+   ================================================================ */
+.detail-header {
+  display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 24px;
+}
+.detail-header-left h1 { font-size: 22px; font-weight: 700; margin-bottom: 6px; font-family: var(--mono); }
+.detail-header-left .meta { font-size: 13px; color: var(--fg3); display: flex; align-items: center; gap: 10px; }
+.detail-actions { display: flex; gap: 10px; }
+
+.detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+@media (max-width: 800px) { .detail-grid { grid-template-columns: 1fr; } }
+
+.error-box {
+  background: var(--fail-bg); border: 1px solid var(--fail);
+  border-radius: var(--r); padding: 16px; margin-bottom: 16px;
+}
+.error-box h3 { color: var(--fail); font-size: 14px; font-weight: 700; margin-bottom: 6px; }
+.error-box p  { color: var(--fail); font-size: 13px; }
+.error-box .hint { color: var(--fg3); font-size: 12px; margin-top: 6px; }
+
+.log-section { margin-bottom: 16px; }
+.log-section h4 { font-size: 12px; color: var(--fg3); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px; }
+.log-block {
+  background: #0d1210; color: #c8e0d8; border-radius: var(--r);
+  padding: 14px 16px; font-family: var(--mono); font-size: 12px;
+  line-height: 1.6; overflow-x: auto; overflow-y: auto;
+  white-space: pre; max-height: 320px;
+}
+
+.results-card { }
+.metric-name  { color: var(--fg3); font-size: 13px; }
+.metric-value { font-size: 16px; font-weight: 700; }
+.artifact-path { font-size: 11px; color: var(--fg3); font-family: var(--mono); margin-top: 10px; }
+
+.fingerprint-line { font-size: 12px; color: var(--fg3); margin-top: 12px; }
+
+/* ================================================================
+   Next step box (home)
+   ================================================================ */
+.next-step {
+  border-left: 4px solid var(--accent); padding: 14px 16px;
+  background: var(--bg-card); border-radius: 0 var(--r) var(--r) 0;
+  margin-bottom: 16px;
+}
+.next-step.failed { border-color: var(--fail); }
+.next-step.running { border-color: var(--warn); }
+.next-step h3 { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+.next-step p  { font-size: 13px; color: var(--fg2); margin-bottom: 10px; }
+
+/* ================================================================
+   Compare page
+   ================================================================ */
+.compare-pickers { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+.picker-label { font-size: 13px; font-weight: 700; margin-bottom: 8px; color: var(--fg2); }
+.picker-pills { display: flex; flex-wrap: wrap; gap: 8px; }
+.pill {
+  padding: 4px 12px; border-radius: 20px; font-size: 12px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--bg-card); color: var(--fg2);
+  font-family: var(--mono); transition: all .12s;
+}
+.pill:hover { border-color: var(--accent); color: var(--accent); }
+.pill.selected { border-color: var(--accent); color: var(--accent); font-weight: 700; }
+
+.fp-banner {
+  padding: 14px 18px; border-radius: var(--r); margin-bottom: 16px;
+  font-size: 14px;
+}
+.fp-banner.match  { background: var(--success-bg); color: var(--success); }
+.fp-banner.diff   { background: var(--warn-bg); }
+.fp-banner .fp-label { font-weight: 700; color: var(--warn); }
+.fp-banner .fp-hint  { color: var(--fg2); margin-left: 8px; }
+
+.cmp-table th { text-align: left; }
+.cmp-diff-val { color: #c05020; font-weight: 600; font-family: var(--mono); font-size: 12px; }
+
+/* ================================================================
+   Misc
+   ================================================================ */
+.empty { text-align: center; padding: 48px; color: var(--fg3); font-size: 14px; }
+.back-btn { display: inline-flex; align-items: center; gap: 5px; color: var(--fg3);
+  font-size: 13px; margin-bottom: 20px; border: 1px solid var(--border);
+  background: var(--bg-card); padding: 5px 12px; border-radius: var(--r); }
+.back-btn:hover { color: var(--fg); background: var(--bg-hover); text-decoration: none; }
+/* ================================================================
+   Modal dialog
+   ================================================================ */
+.modal-overlay {
+  position: fixed; inset: 0; z-index: 100;
+  background: rgba(0,0,0,.45); backdrop-filter: blur(2px);
+  display: flex; align-items: center; justify-content: center;
+}
+.modal {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--r2); padding: 28px 28px 24px;
+  min-width: 360px; max-width: 480px; width: 90%;
+  box-shadow: 0 8px 32px rgba(0,0,0,.18);
+}
+.modal h3 { font-size: 16px; font-weight: 700; margin-bottom: 10px; }
+.modal p  { font-size: 13px; color: var(--fg2); line-height: 1.6; white-space: pre-wrap; }
+.modal pre {
+  font-family: var(--mono); font-size: 12px; background: var(--bg);
+  border: 1px solid var(--border); border-radius: var(--r);
+  padding: 10px 12px; margin: 12px 0 0; overflow-x: auto;
+  color: var(--fg2); line-height: 1.6;
+}
+.modal-actions {
+  display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;
+}
+
+input[type=text], input[type=number] {
+  border: 1px solid var(--border); border-radius: var(--r); padding: 7px 10px;
+  font-size: 13px; width: 100%; background: var(--bg); color: var(--fg);
+}
+input[type=text]:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+input[type=checkbox] { width: 14px; height: 14px; cursor: pointer; accent-color: var(--accent); }
+#loading-state { text-align: center; padding: 64px; color: var(--fg3); }
+</style>
+</head>
+<body>
+
+<!-- ============================================================
+     SIDEBAR
+     ============================================================ -->
+<aside id="sidebar">
+  <div class="sb-logo">
+    <span class="brand">mlt</span>
+    <span class="sub">Web UI</span>
+  </div>
+
+  <div class="sb-project">
+    <div class="label">open project</div>
+    <div class="path" id="sb-path">—</div>
+  </div>
+
+  <nav id="sidebar-nav">
+    <a href="#/" data-page="home">Home</a>
+    <a href="#/train" data-page="train">Train</a>
+    <a href="#/runs" data-page="runs">Runs</a>
+    <a href="#/compare" data-page="compare">Compare</a>
+    <a href="#/serve" data-page="serve">Serve</a>
+  </nav>
+
+  <hr class="sb-sep">
+
+  <div class="sb-info" id="sb-info">
+    <span>docker: <b id="sb-docker">—</b></span>
+    <span>mlt Python: <b id="sb-python">—</b></span>
+    <span id="sb-pkg">mlt —</span>
+  </div>
+
+  <div class="sb-dark-row">
+    <span class="sb-dark-label">Dark mode</span>
+    <label class="toggle">
+      <input type="checkbox" id="dark-toggle" onchange="toggleDarkMode()">
+      <span class="toggle-track"></span>
+    </label>
+  </div>
+</aside>
+
+<!-- ============================================================
+     MAIN
+     ============================================================ -->
+<main id="main">
+  <div id="loading-state">Loading…</div>
+</main>
+
+<script>
+// ===================================================================
+// Dark mode: simple on/off toggle (persisted in localStorage)
+// ===================================================================
+function applyDarkMode(on) {
+  document.documentElement.classList.toggle('dark', on);
+  document.documentElement.classList.toggle('light', !on);
+  const cb = document.getElementById('dark-toggle');
+  if (cb) cb.checked = on;
+}
+
+function toggleDarkMode() {
+  const on = document.getElementById('dark-toggle').checked;
+  localStorage.setItem('mlt-dark', on ? '1' : '0');
+  applyDarkMode(on);
+}
+
+// Apply immediately on script parse to avoid flash.
+applyDarkMode(localStorage.getItem('mlt-dark') === '1');
+
+// ===================================================================
+// State
+// ===================================================================
+const S = {
+  meta:     null,
+  project:  null,
+  system:   null,   // { docker, python }
+  settings: null,   // { python_requested, python_source, runner, runner_display, ... }
+  runs:         null,              // cached list (all)
+  selected:     [],                // run_ids chosen for compare
+  statusFilter: 'all',
+  serve:        null,              // last /api/serve/status snapshot
+  verifyStatus: { status: 'idle' }, // last /api/verify/status snapshot
+};
+
+// ===================================================================
+// API
+// ===================================================================
+async function api(path) {
+  const r = await fetch(path);
+  if (!r.ok) {
+    let detail = r.statusText;
+    try { detail = (await r.json()).detail || detail; } catch(_) {}
+    throw new Error(detail);
+  }
+  return r.json();
+}
+
+// ===================================================================
+// Helpers
+// ===================================================================
+function el(tag, cls, html) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (html !== undefined) e.innerHTML = html;
+  return e;
+}
+function $(sel) { return document.querySelector(sel); }
+function $$(sel) { return [...document.querySelectorAll(sel)]; }
+
+function age(iso) {
+  if (!iso) return '—';
+  const s = (Date.now() - new Date(iso)) / 1000;
+  if (s < 60)    return `${Math.round(s)}s ago`;
+  if (s < 3600)  return `${Math.round(s / 60)}m ago`;
+  if (s < 86400) return `${Math.round(s / 3600)}h ago`;
+  return `${Math.round(s / 86400)}d ago`;
+}
+
+function dur(s) {
+  if (s == null) return '—';
+  if (s < 60) return `${s.toFixed(1)}s`;
+  return `${Math.floor(s / 60)}m ${Math.round(s % 60)}s`;
+}
+
+function shortId(id) {
+  if (!id) return '—';
+  // "20261126-090210-b7e4d1" → "…b7e4d1"  (last 6 chars after last dash)
+  const parts = id.split('-');
+  return `…${parts[parts.length - 1]}`;
+}
+
+function shortHash(h) { return h ? h.slice(0, 8) : '—'; }
+
+function badge(status) {
+  return `<span class="badge badge-${status}">${status}</span>`;
+}
+
+function metricsCell(metrics) {
+  if (!metrics || !Object.keys(metrics).length) return '—';
+  return Object.entries(metrics).slice(0, 3)
+    .map(([k, v]) => `${k}=${typeof v === 'number' ? v.toFixed(4) : v}`)
+    .join('<br>');
+}
+
+function kvRows(pairs) {
+  return pairs.map(([k, v]) =>
+    `<tr><td class="k">${k}</td><td class="v">${v ?? '—'}</td></tr>`
+  ).join('');
+}
+
+// ===================================================================
+// Routing
+// ===================================================================
+function setActivePage(page) {
+  $$('#sidebar-nav a').forEach(a => {
+    a.classList.toggle('active', a.dataset.page === page);
+  });
+}
+
+async function route() {
+  clearTrainPoll();
+  clearServePoll();
+  clearVerifyPoll();
+
+  const hash = location.hash || '#/';
+  const path = hash.slice(1);  // strip '#'
+
+  if (path === '/' || path === '') {
+    setActivePage('home');
+    renderHome();
+  } else if (path === '/train') {
+    setActivePage('train');
+    renderTrain();
+  } else if (path === '/runs') {
+    setActivePage('runs');
+    renderRuns();
+  } else if (path.startsWith('/run/')) {
+    setActivePage('runs');
+    renderRunDetail(decodeURIComponent(path.slice(5)));
+  } else if (path.startsWith('/compare')) {
+    setActivePage('compare');
+    const parts = path.slice(9).split('/').filter(Boolean);
+    renderCompare(parts[0] || null, parts[1] || null);
+  } else if (path === '/serve') {
+    setActivePage('serve');
+    renderServe();
+  } else if (path === '/new') {
+    setActivePage('new');
+    renderNewProject();
+  } else if (path.startsWith('/verify/')) {
+    setActivePage('runs');
+    renderVerify(decodeURIComponent(path.slice(8)));
+  } else {
+    setActivePage('home');
+    renderHome();
+  }
+}
+
+window.addEventListener('hashchange', route);
+
+// ===================================================================
+// Bootstrap
+// ===================================================================
+window.addEventListener('DOMContentLoaded', async () => {
+  try {
+    [S.meta, S.project] = await Promise.all([api('/api/meta'), api('/api/project')]);
+  } catch (e) {
+    $('#main').innerHTML =
+      `<div style="padding:48px;color:var(--fail)">Could not reach mlt UI server: ${e.message}</div>`;
+    return;
+  }
+
+  // Sidebar: sync dark-mode toggle state
+  applyDarkMode(localStorage.getItem('mlt-dark') === '1');
+
+  // Sidebar: package info
+  document.title = `mlt ${S.meta.version}`;
+  $('#sb-path').textContent = S.project.dir;
+  $('#sb-pkg').innerHTML = `<b>mlt · Model Lifecycle Toolkit</b><br>version ${S.meta.version}`;
+
+  // Sidebar: system + project settings (non-blocking — UI renders first)
+  Promise.all([api('/api/system'), api('/api/project/settings')])
+    .then(([sys, settings]) => {
+      S.system   = sys;
+      S.settings = settings;
+      const dockerEl  = $('#sb-docker');
+      const pythonEl  = $('#sb-python');
+      if (dockerEl) {
+        dockerEl.textContent = sys.docker;
+        dockerEl.className   = sys.docker === 'available' ? 'ok' : 'err';
+      }
+      if (pythonEl) pythonEl.textContent = sys.python;
+    })
+    .catch(() => {});  // sidebar info is best-effort
+
+  route();
+});
+
+// ===================================================================
+// Modal dialog (replaces native confirm())
+// ===================================================================
+function showModal({ title, body, pre, confirmLabel = 'Confirm', danger = false }) {
+  return new Promise(resolve => {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+      <div class="modal" role="dialog" aria-modal="true">
+        <h3>${escHtml(title)}</h3>
+        ${body ? `<p>${escHtml(body)}</p>` : ''}
+        ${pre  ? `<pre>${escHtml(pre)}</pre>` : ''}
+        <div class="modal-actions">
+          <button class="btn btn-ghost" id="modal-cancel">Cancel</button>
+          <button class="btn ${danger ? 'btn-secondary' : 'btn-primary'}"
+            id="modal-confirm"
+            style="${danger ? 'border-color:var(--fail);color:var(--fail)' : ''}">
+            ${escHtml(confirmLabel)}
+          </button>
+        </div>
+      </div>`;
+
+    document.body.appendChild(overlay);
+
+    const cleanup = (result) => {
+      overlay.remove();
+      resolve(result);
+    };
+
+    overlay.querySelector('#modal-confirm').addEventListener('click', () => cleanup(true));
+    overlay.querySelector('#modal-cancel').addEventListener('click',  () => cleanup(false));
+    // Click outside the modal box cancels
+    overlay.addEventListener('click', e => { if (e.target === overlay) cleanup(false); });
+    // Escape key cancels
+    const onKey = e => { if (e.key === 'Escape') { cleanup(false); document.removeEventListener('keydown', onKey); } };
+    document.addEventListener('keydown', onKey);
+
+    // Focus the confirm button
+    overlay.querySelector('#modal-confirm').focus();
+  });
+}
+
+// ===================================================================
+// TRAIN
+// ===================================================================
+let _trainPollTimer = null;
+
+function _renderSteps(steps) {
+  if (!steps || !steps.length) return '';
+  const icons = { pending: '○', running: '▶', done: '✓', failed: '✗' };
+  const colors = {
+    pending: 'var(--fg3)',
+    running: 'var(--warn)',
+    done:    'var(--success)',
+    failed:  'var(--fail)',
+  };
+  return `<div style="display:flex;flex-wrap:wrap;gap:6px 20px">` +
+    steps.map(s => `
+      <span style="font-size:12px;color:${colors[s.status] || 'var(--fg3)'}">
+        ${icons[s.status] || '○'} ${escHtml(s.label)}
+      </span>`).join('') +
+    `</div>`;
+}
+
+async function renderTrain() {
+  $('#main').innerHTML = '<div id="loading-state">Loading…</div>';
+
+  // Load settings + params + current train status + system in parallel
+  const [settingsRes, paramsRes, statusRes, systemRes] = await Promise.allSettled([
+    S.settings ? Promise.resolve(S.settings) : api('/api/project/settings'),
+    api('/api/project/params'),
+    api('/api/train/status'),
+    S.system   ? Promise.resolve(S.system)   : api('/api/system'),
+  ]);
+
+  if (settingsRes.status === 'fulfilled') S.settings = settingsRes.value;
+  if (systemRes.status  === 'fulfilled') S.system   = systemRes.value;
+  const params = paramsRes.status === 'fulfilled' ? paramsRes.value : {};
+  const trainStatus = statusRes.status === 'fulfilled' ? statusRes.value : { status: 'idle' };
+
+  buildTrainView(params, trainStatus);
+}
+
+function buildTrainView(params, trainStatus) {
+  clearTrainPoll();
+  const running = trainStatus.status === 'running';
+
+  // Build editable param rows
+  const paramRows = Object.entries(params).length
+    ? Object.entries(params).map(([k, v]) => `
+        <tr>
+          <td class="k">${escHtml(k)}</td>
+          <td><input type="text" class="param-input" data-key="${escHtml(k)}"
+            value="${escHtml(String(v))}" ${running ? 'disabled' : ''}
+            style="width:100%;font-family:var(--mono);font-size:12px"></td>
+        </tr>`).join('')
+    : `<tr><td colspan="2" style="color:var(--fg3);padding:8px 0">No params.yaml found in project.</td></tr>`;
+
+  const settingsHtml = S.settings ? `
+    <table class="kv" style="margin-bottom:0">
+      ${kvRows([
+        ['python', `${S.settings.python_requested} (${S.settings.python_source})`],
+      ])}
+    </table>` : '<p style="color:var(--fg3)">—</p>';
+
+  const runners = S.system?.runners || ['auto', 'venv', 'docker'];
+  const defaultRunner = S.settings?.runner || 'auto';
+  const runnerPills = runners.map(r =>
+    `<span class="chip train-runner-pill ${r === defaultRunner ? 'active' : ''}"
+      data-runner="${r}" onclick="_selectTrainRunner('${r}')">${r}</span>`
+  ).join('');
+
+  // Status / progress area
+  let statusHtml = '';
+  if (trainStatus.status === 'running') {
+    const phase = trainStatus.run_id ? 'Training…' : 'Building environment…';
+    const runLine = trainStatus.run_id
+      ? `<span style="font-family:var(--mono);font-size:12px">${escHtml(trainStatus.run_id)}</span>`
+      : '<span style="color:var(--fg3)">run will appear after environment is ready</span>';
+    statusHtml = `
+      <div class="card" id="train-status-card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <div>
+            <div class="card-title" style="margin-bottom:4px" id="train-phase">${phase}</div>
+            <div style="font-size:12px;color:var(--fg3)" id="train-run-id">${runLine}</div>
+          </div>
+          <button class="btn btn-ghost" onclick="cancelTrain()"
+            style="border-color:var(--fail);color:var(--fail);flex-shrink:0">
+            Cancel
+          </button>
+        </div>
+        <div id="train-steps-list" style="margin-bottom:14px">
+          ${_renderSteps(trainStatus.steps)}
+        </div>
+        <div class="log-section" id="train-log-section">
+          <h4 id="train-log-label">${trainStatus.run_id ? 'train.log' : 'build.log'}</h4>
+          <div class="log-block" id="train-log-block">(waiting for output…)</div>
+        </div>
+      </div>`;
+  } else if (trainStatus.status === 'done' && trainStatus.run_id) {
+    statusHtml = `
+      <div class="card" style="border-color:var(--success)">
+        <div class="card-title" style="color:var(--success)">Training completed</div>
+        <p style="font-size:13px;margin-bottom:12px">
+          <a href="#/run/${trainStatus.run_id}" class="mono">${escHtml(trainStatus.run_id)}</a>
+        </p>
+        <a href="#/run/${trainStatus.run_id}" class="btn btn-primary">View run details</a>
+      </div>`;
+  } else if (trainStatus.status === 'failed') {
+    statusHtml = `
+      <div class="card" style="border-color:var(--fail)">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div class="card-title" style="color:var(--fail)">Training failed</div>
+          <button class="btn btn-ghost" style="font-size:12px;padding:4px 10px"
+            onclick="dismissTrain()">Dismiss</button>
+        </div>
+        <p style="font-size:13px;color:var(--fg2);margin-top:4px">${escHtml(trainStatus.error || 'Unknown error')}</p>
+        ${trainStatus.run_id ? `<a href="#/run/${trainStatus.run_id}" class="btn btn-secondary" style="margin-top:10px">View run details</a>` : ''}
+      </div>`;
+  }
+
+  $('#main').innerHTML = `
+    <h1 class="page-title">Train</h1>
+    <p class="page-sub">Train a model and record a run.</p>
+
+    <div class="detail-grid" style="margin-bottom:16px">
+      <div class="card" style="margin-bottom:0">
+        <div class="card-title">Effective settings</div>
+        <p style="font-size:12px;color:var(--fg3);margin-bottom:10px">Set via <code>.python-version</code> and environment variables. Override runner below.</p>
+        ${settingsHtml}
+      </div>
+      <div class="card" style="margin-bottom:0">
+        <div class="card-title">Parameters <span style="font-size:11px;font-weight:400;color:var(--fg3)">params.yaml</span></div>
+        <p style="font-size:12px;color:var(--fg3);margin-bottom:10px">
+          These values will be saved to <code>params.yaml</code> before training.
+        </p>
+        <table class="kv" id="params-table">${paramRows}</table>
+      </div>
+    </div>
+
+    ${statusHtml}
+
+    ${!running ? `
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-title" style="margin-bottom:8px">Run options</div>
+      <div style="display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start">
+        <div>
+          <div style="font-size:12px;color:var(--fg3);margin-bottom:6px">Runner</div>
+          <div class="filter-chips" style="margin-bottom:0">${runnerPills}</div>
+        </div>
+        <div>
+          <div style="font-size:12px;color:var(--fg3);margin-bottom:6px">
+            Seed <span style="font-weight:400">(default: ${escHtml(String(S.settings?.seed ?? '—'))} from ${escHtml(S.settings?.seed_source ?? '—')})</span>
+          </div>
+          <input type="number" id="seed-input" placeholder="leave blank to use default"
+            value="" min="0" ${running ? 'disabled' : ''}
+            style="width:220px;font-family:var(--mono);font-size:12px">
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;padding-top:22px">
+          <input type="checkbox" id="force-checkbox" ${running ? 'disabled' : ''}>
+          <label for="force-checkbox" style="font-size:13px;cursor:pointer">
+            Force re-train even if an identical run exists
+          </label>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div style="display:flex;gap:10px;align-items:center">
+        <button class="btn btn-primary" id="start-train-btn" onclick="confirmTrain()">
+          Start training
+        </button>
+        ${trainStatus.status !== 'idle' ? `<a href="#/runs" class="btn btn-ghost">View all runs</a>` : ''}
+      </div>
+      <div id="train-error-msg" style="display:none;margin-top:8px;font-size:13px;color:var(--fail)"></div>
+    </div>` : ''}`;
+
+  if (running) startTrainPoll();
+}
+
+function collectParams() {
+  const result = {};
+  $$('.param-input').forEach(input => {
+    const raw = input.value.trim();
+    // Coerce to number if possible, else keep string
+    const num = Number(raw);
+    result[input.dataset.key] = raw === '' ? '' : (isNaN(num) || raw === '' ? raw : num);
+  });
+  return result;
+}
+
+function _selectTrainRunner(r) {
+  $$('.train-runner-pill').forEach(el => el.classList.toggle('active', el.dataset.runner === r));
+}
+
+function _selectedTrainRunner() {
+  const active = $('.train-runner-pill.active');
+  return active ? active.dataset.runner : (S.settings?.runner || 'auto');
+}
+
+async function confirmTrain() {
+  const params = collectParams();
+  const runner = _selectedTrainRunner();
+  const force  = !!($('#force-checkbox')?.checked);
+  const seedRaw = ($('#seed-input')?.value || '').trim();
+  const seed = seedRaw !== '' ? parseInt(seedRaw, 10) : (S.settings?.seed ?? null);
+  const paramsPreview = Object.keys(params).length
+    ? Object.entries(params).map(([k, v]) => `${k}: ${v}`).join('\n')
+    : null;
+  const confirmed = await showModal({
+    title: 'Start training',
+    body: paramsPreview
+      ? 'These values will be saved to params.yaml before training.'
+      : 'Start a new training run with the current params.yaml?',
+    pre: paramsPreview,
+    confirmLabel: 'Start training',
+  });
+  if (!confirmed) return;
+
+  const btn = $('#start-train-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Starting…'; }
+
+  try {
+    const r = await fetch('/api/train', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        params,
+        runner,
+        force,
+        python: S.settings?.python_requested || null,
+        seed,
+      }),
+    });
+    if (!r.ok) {
+      let msg = r.statusText;
+      try { msg = (await r.json()).detail || msg; } catch (_) {}
+      throw new Error(msg);
+    }
+    // Re-render immediately so the status card appears
+    const status = await api('/api/train/status');
+    buildTrainView(params, status);
+  } catch (e) {
+    const errEl = $('#train-error-msg');
+    if (errEl) { errEl.style.display = 'block'; errEl.textContent = e.message; }
+    if (btn) { btn.disabled = false; btn.textContent = 'Start training'; }
+  }
+}
+
+async function cancelTrain() {
+  const confirmed = await showModal({
+    title: 'Cancel training',
+    body: 'The run will be marked as failed. This cannot be undone.',
+    confirmLabel: 'Cancel training',
+    danger: true,
+  });
+  if (!confirmed) return;
+  try {
+    await fetch('/api/train', { method: 'DELETE' });
+    const status = await api('/api/train/status');
+    const params = await api('/api/project/params');
+    buildTrainView(params, status);
+  } catch (e) {
+    alert(`Cancel failed: ${e.message}`);
+  }
+}
+
+async function dismissTrain() {
+  try { await fetch('/api/train/dismiss', { method: 'POST' }); } catch (_) {}
+  const params = await api('/api/project/params');
+  buildTrainView(params, { status: 'idle' });
+}
+
+async function dismissVerify() {
+  try { await fetch('/api/verify/dismiss', { method: 'POST' }); } catch (_) {}
+  // Re-render as idle — orig is recovered from the URL hash (#/verify/<run_id>)
+  const runId = decodeURIComponent(location.hash.slice('#/verify/'.length));
+  try {
+    const orig = await api(`/api/runs/${encodeURIComponent(runId)}`);
+    buildVerifyView(orig, { status: 'idle' });
+  } catch (_) {}
+}
+
+function startTrainPoll() {
+  _trainPollTimer = setInterval(async () => {
+    try {
+      const status = await api('/api/train/status');
+
+      if (status.status !== 'running') {
+        const params = await api('/api/project/params');
+        buildTrainView(params, status);
+        return;
+      }
+
+      // Update phase label, steps and run_id line in place (avoid full re-render)
+      const phaseEl  = $('#train-phase');
+      const runIdEl  = $('#train-run-id');
+      const stepsEl  = $('#train-steps-list');
+      const logSec   = $('#train-log-section');
+      const logBlock = $('#train-log-block');
+
+      const building = !status.run_id;
+      if (phaseEl) phaseEl.textContent = building ? 'Building environment…' : 'Training…';
+      if (stepsEl && status.steps) stepsEl.innerHTML = _renderSteps(status.steps);
+
+      if (runIdEl && status.run_id) {
+        runIdEl.innerHTML = `<span style="font-family:var(--mono);font-size:12px">${escHtml(status.run_id)}</span>`;
+      }
+
+      // Poll the right log depending on phase
+      const labelEl = $('#train-log-label');
+      if (labelEl) labelEl.textContent = building ? 'build.log' : 'train.log';
+
+      if (logBlock) {
+        try {
+          const url = building
+            ? '/api/build/log?tail=40'
+            : `/api/runs/${encodeURIComponent(status.run_id)}/log?tail=40`;
+          const logData = await api(url);
+          const lines = logData.lines || [];
+          logBlock.textContent = lines.length ? lines.join('\n') : '(no output yet)';
+          logBlock.scrollTop = logBlock.scrollHeight;
+        } catch (_) {}
+      }
+    } catch (_) {}
+  }, 5000);
+}
+
+function clearTrainPoll() {
+  if (_trainPollTimer) { clearInterval(_trainPollTimer); _trainPollTimer = null; }
+}
+
+// ===================================================================
+// SERVE
+// ===================================================================
+
+let _servePollTimer = null;
+
+async function renderServe() {
+  $('#main').innerHTML = '<div id="loading-state">Loading…</div>';
+
+  let snap = { status: 'idle', run_id: null, url: null, error: null, schema: null };
+  try { snap = await api('/api/serve/status'); } catch (_) {}
+  S.serve = snap;
+
+  let runs = [];
+  if (snap.status === 'idle' || snap.status === 'failed') {
+    try {
+      const all = await api('/api/runs?limit=50');
+      runs = all.filter(r => r.status === 'succeeded');
+    } catch (_) {}
+  }
+
+  buildServeView(snap, runs);
+  if (snap.status === 'starting') startServePoll();
+}
+
+function buildServeView(snap, runs) {
+  S.serve = snap;
+  let statusCard = '';
+  let body = '';
+
+  if (snap.status === 'starting') {
+    statusCard = `
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-title" style="margin-bottom:4px">Starting…</div>
+        <p style="font-size:13px;color:var(--fg3)">Waiting for /health to return 200.</p>
+      </div>`;
+  } else if (snap.status === 'running') {
+    const schema   = snap.schema || {};
+    const features = schema.features || {};
+    const nFeat    = Object.keys(features).length;
+    const schemaNote = nFeat > 0
+      ? `schema: loaded from /schema (${nFeat} feature${nFeat !== 1 ? 's' : ''})`
+      : 'schema: empty (this run has no schema.yaml)';
+
+    statusCard = `
+      <div class="card" style="margin-bottom:16px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div>
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+              <span style="width:8px;height:8px;border-radius:50%;background:var(--success);display:inline-block;flex-shrink:0"></span>
+              <strong>running · /health 200</strong>
+            </div>
+            <div style="font-family:var(--mono);font-size:12px;color:var(--fg2);margin-bottom:2px">
+              ${escHtml(snap.url)} · ${escHtml(snap.run_id)}
+            </div>
+            <div style="font-size:12px;color:var(--fg3);margin-bottom:2px">
+              Interactive docs at <a href="${escHtml(snap.url)}/docs" target="_blank" rel="noopener">/docs</a>
+              · schema at <a href="${escHtml(snap.url)}/schema" target="_blank" rel="noopener">/schema</a>
+            </div>
+            <div style="font-size:12px;color:var(--fg3)">${escHtml(schemaNote)}</div>
+          </div>
+          <button class="btn btn-ghost" style="border-color:var(--fail);color:var(--fail);flex-shrink:0"
+            onclick="confirmStopServe()">Stop service</button>
+        </div>
+      </div>`;
+
+    const predictPanel = _buildPredictPanel(snap, features, nFeat > 0);
+    const curlText     = _buildCurl(snap, features, nFeat > 0);
+
+    body = `
+      <div class="detail-grid">
+        ${predictPanel}
+        <div class="card" style="margin-bottom:0" id="request-card">
+          <div class="card-title" style="margin-bottom:8px">Request</div>
+          <div class="log-block" id="curl-block" style="margin-bottom:16px;white-space:pre-wrap">${escHtml(curlText)}</div>
+          <div id="response-area" style="display:none">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+              <span class="card-title">Response</span>
+              <span id="response-status" style="font-size:12px;font-weight:600"></span>
+            </div>
+            <div class="log-block" id="response-block"></div>
+          </div>
+        </div>
+      </div>`;
+  } else {
+    // idle or failed — show run picker
+    const errorHtml = snap.status === 'failed' && snap.error
+      ? `<p style="color:var(--fail);font-size:13px;margin-bottom:12px">${escHtml(snap.error)}</p>` : '';
+    const runBtns = runs.length
+      ? runs.map(r => `<button class="btn btn-ghost mono"
+            style="font-size:12px" onclick="confirmStartServe('${escHtml(r.run_id)}')">${escHtml(r.run_id)}</button>`).join('\n')
+      : '<p style="color:var(--fg3);font-size:13px">No succeeded runs yet — train a model first.</p>';
+
+    body = `
+      <div class="card">
+        <div class="card-title" style="margin-bottom:4px">No active service</div>
+        <p style="font-size:13px;color:var(--fg2);margin-bottom:12px">Choose a succeeded run to serve.</p>
+        ${errorHtml}
+        <div style="display:flex;flex-wrap:wrap;gap:8px">${runBtns}</div>
+      </div>`;
+  }
+
+  $('#main').innerHTML = `
+    <h1 class="page-title">Serve</h1>
+    <p class="page-sub">Start the inference API for a succeeded run.</p>
+    ${statusCard}${body}`;
+
+  // Wire up input → curl update after DOM is ready
+  if (snap.status === 'running') {
+    $$('.feature-input').forEach(inp => inp.addEventListener('input', _updateCurl));
+    const jsonArea = $('#json-body');
+    if (jsonArea) jsonArea.addEventListener('input', _updateCurl);
+  }
+}
+
+function _buildPredictPanel(snap, features, hasFeatures) {
+  if (!hasFeatures) {
+    const example = JSON.stringify({ inputs: [{ feature: 'value' }] }, null, 2);
+    return `
+      <div class="card" style="margin-bottom:0">
+        <div class="card-title" style="margin-bottom:8px">Test /predict</div>
+        <div style="background:rgba(255,180,0,.12);border:1px solid rgba(255,180,0,.35);
+            border-radius:var(--r);padding:12px;margin-bottom:14px;font-size:13px;color:var(--fg1)">
+          This run has no schema (/schema returned {}). Fields cannot be built and the API does
+          not validate them. Edit the request body as JSON.
+        </div>
+        <label style="font-size:12px;color:var(--fg3);display:block;margin-bottom:4px">Request body (JSON)</label>
+        <textarea id="json-body" style="width:100%;box-sizing:border-box;min-height:120px;
+            font-family:var(--mono);font-size:12px;border:1px solid var(--border);
+            border-radius:var(--r);padding:10px;background:var(--bg);color:var(--fg1);
+            resize:vertical">${escHtml(example)}</textarea>
+        <button class="btn btn-primary" style="margin-top:12px" onclick="doPredict()">Predict</button>
+      </div>`;
+  }
+
+  const entries = Object.entries(features);
+  let rows = '';
+  for (let i = 0; i < entries.length; i += 2) {
+    rows += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+      ${_featureField(entries[i][0], entries[i][1])}
+      ${entries[i + 1] ? _featureField(entries[i + 1][0], entries[i + 1][1]) : '<div></div>'}
+    </div>`;
+  }
+
+  return `
+    <div class="card" style="margin-bottom:0">
+      <div class="card-title" style="margin-bottom:4px">Test /predict</div>
+      <p style="font-size:12px;color:var(--fg3);margin-bottom:14px">
+        Fields come from the run's schema (GET /schema).
+        Leave one empty to see the 422 error with index and field.
+      </p>
+      ${rows}
+      <button class="btn btn-primary" onclick="doPredict()">Predict</button>
+    </div>`;
+}
+
+function _featureField(name, spec) {
+  const t   = spec.type || 'float';
+  const val = spec.allowed ? spec.allowed[0]
+    : (t === 'int' ? (spec.min ?? 0) : t === 'float' ? (spec.min ?? 0.0) : '');
+  return `<div>
+    <label style="font-size:12px;color:var(--fg3);display:block;margin-bottom:4px">${escHtml(name)}</label>
+    <input id="feat-${escHtml(name)}" class="feature-input"
+      data-name="${escHtml(name)}" data-type="${escHtml(t)}"
+      type="text" value="${escHtml(String(val))}"
+      style="width:100%;box-sizing:border-box;border:1px solid var(--border);
+        border-radius:var(--r);padding:8px 10px;background:var(--bg);color:var(--fg1);font-size:14px">
+  </div>`;
+}
+
+function _buildCurl(snap, features, hasFeatures) {
+  const url = `${snap.url}/predict`;
+  let record;
+  if (hasFeatures) {
+    record = {};
+    Object.entries(features).forEach(([name, spec]) => {
+      const inp = $(`#feat-${name}`);
+      const raw = inp ? inp.value.trim() : String(spec.allowed ? spec.allowed[0] : (spec.min ?? 0));
+      const t   = spec.type || 'float';
+      record[name] = raw === '' ? null
+        : t === 'int'   ? (parseInt(raw, 10)  || 0)
+        : t === 'float' ? (parseFloat(raw) || 0.0)
+        : raw;
+    });
+  } else {
+    const area = $('#json-body');
+    try { record = area ? JSON.parse(area.value)?.inputs?.[0] ?? {} : {}; }
+    catch (_) { record = { feature: 'value' }; }
+  }
+  const bodyStr = JSON.stringify({ inputs: [record] });
+  return `curl -X POST ${url} \\\n  -H "Content-Type: application/json" \\\n  -d '${bodyStr}'`;
+}
+
+function _updateCurl() {
+  const snap = S.serve;
+  if (!snap || snap.status !== 'running') return;
+  const features   = snap.schema?.features || {};
+  const hasFeatures = Object.keys(features).length > 0;
+  const el = $('#curl-block');
+  if (el) el.textContent = _buildCurl(snap, features, hasFeatures);
+}
+
+async function doPredict() {
+  const snap = S.serve;
+  if (!snap || snap.status !== 'running') return;
+  const features    = snap.schema?.features || {};
+  const hasFeatures = Object.keys(features).length > 0;
+
+  let body;
+  if (hasFeatures) {
+    const record = {};
+    $$('.feature-input').forEach(inp => {
+      const raw = inp.value.trim();
+      const t   = inp.dataset.type;
+      record[inp.dataset.name] = raw === '' ? null
+        : t === 'int'   ? parseInt(raw, 10)
+        : t === 'float' ? parseFloat(raw)
+        : raw;
+    });
+    body = JSON.stringify({ inputs: [record] });
+  } else {
+    body = ($('#json-body') || {}).value || '{"inputs":[]}';
+  }
+
+  const respArea   = $('#response-area');
+  const respBlock  = $('#response-block');
+  const respStatus = $('#response-status');
+  if (respArea)   respArea.style.display   = '';
+  if (respBlock)  respBlock.textContent    = 'Loading…';
+  if (respStatus) respStatus.textContent   = '';
+
+  try {
+    const r    = await fetch('/api/serve/predict', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body,
+    });
+    const data = await r.json();
+    if (respStatus) {
+      respStatus.textContent = `HTTP ${r.status}`;
+      respStatus.style.color = r.ok ? 'var(--success)' : 'var(--fail)';
+    }
+    if (respBlock) respBlock.textContent = JSON.stringify(data, null, 2);
+  } catch (e) {
+    if (respBlock) respBlock.textContent = String(e);
+  }
+}
+
+async function confirmStartServe(runId) {
+  const defaultPort = S.system?.default_port || 8000;
+  const port = await _promptPort(defaultPort);
+  if (port === null) return;
+  try {
+    await fetch('/api/serve', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ run_id: runId, port }),
+    });
+  } catch (_) {}
+  renderServe();
+}
+
+function _promptPort(defaultPort) {
+  return new Promise(resolve => {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+      <div class="modal" role="dialog" aria-modal="true">
+        <h3>Start service</h3>
+        <p>Port to listen on:</p>
+        <input type="number" id="serve-port-input" value="${defaultPort}"
+          min="1" max="65535" style="margin-top:8px;width:120px">
+        <div class="modal-actions">
+          <button class="btn btn-ghost" id="modal-cancel">Cancel</button>
+          <button class="btn btn-primary" id="modal-confirm">Start</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    const inp = overlay.querySelector('#serve-port-input');
+    inp.focus(); inp.select();
+    const cleanup = (val) => { overlay.remove(); resolve(val); };
+    overlay.querySelector('#modal-confirm').addEventListener('click', () => {
+      const p = parseInt(inp.value, 10);
+      cleanup(p > 0 && p < 65536 ? p : defaultPort);
+    });
+    overlay.querySelector('#modal-cancel').addEventListener('click', () => cleanup(null));
+    overlay.addEventListener('click', e => { if (e.target === overlay) cleanup(null); });
+    const onKey = e => {
+      if (e.key === 'Escape') { cleanup(null); document.removeEventListener('keydown', onKey); }
+      if (e.key === 'Enter')  { overlay.querySelector('#modal-confirm').click(); }
+    };
+    document.addEventListener('keydown', onKey);
+  });
+}
+
+async function confirmStopServe() {
+  const ok = await showModal({
+    title: 'Stop service',
+    body:  'Stop the active inference service?',
+    confirmLabel: 'Stop',
+    danger: true,
+  });
+  if (!ok) return;
+
+  // Show immediate feedback while the DELETE waits for the process to exit.
+  const stopBtn = $('button[onclick="confirmStopServe()"]');
+  if (stopBtn) { stopBtn.disabled = true; stopBtn.textContent = 'Stopping…'; }
+
+  try { await fetch('/api/serve', { method: 'DELETE' }); } catch (_) {}
+  renderServe();
+}
+
+function startServePoll() {
+  _servePollTimer = setInterval(async () => {
+    try {
+      const snap = await api('/api/serve/status');
+      if (snap.status !== 'starting') {
+        clearServePoll();
+        S.serve = snap;
+        let runs = [];
+        if (snap.status === 'idle' || snap.status === 'failed') {
+          try {
+            const all = await api('/api/runs?limit=50');
+            runs = all.filter(r => r.status === 'succeeded');
+          } catch (_) {}
+        }
+        buildServeView(snap, runs);
+      }
+    } catch (_) {}
+  }, 2000);
+}
+
+function clearServePoll() {
+  if (_servePollTimer) { clearInterval(_servePollTimer); _servePollTimer = null; }
+}
+
+// ===================================================================
+// HOME
+// ===================================================================
+async function renderHome() {
+  $('#main').innerHTML = '<div id="loading-state">Loading…</div>';
+
+  let runs = [], trainStatus = { status: 'idle' }, serveStatus = { status: 'idle' }, verifyStatus = { status: 'idle' };
+  const [runsResult, trainResult, serveResult, verifyResult] = await Promise.allSettled([
+    api('/api/runs?limit=20'),
+    api('/api/train/status'),
+    api('/api/serve/status'),
+    api('/api/verify/status'),
+    S.settings ? Promise.resolve() : api('/api/project/settings').then(s => { S.settings = s; }).catch(() => {}),
+    S.system   ? Promise.resolve() : api('/api/system').then(s => {
+      S.system = s;
+      const dockerEl = $('#sb-docker');
+      const pythonEl = $('#sb-python');
+      if (dockerEl) { dockerEl.textContent = s.docker; dockerEl.className = s.docker === 'available' ? 'ok' : 'err'; }
+      if (pythonEl) pythonEl.textContent = s.python;
+    }).catch(() => {}),
+  ]);
+  if (runsResult.status   === 'fulfilled') runs         = runsResult.value;
+  if (trainResult.status  === 'fulfilled') trainStatus  = trainResult.value;
+  if (serveResult.status  === 'fulfilled') serveStatus  = serveResult.value;
+  if (verifyResult.status === 'fulfilled') verifyStatus = verifyResult.value;
+  const last = runs[0];
+
+  let nextHtml = '';
+  if (!last) {
+    nextHtml = `<div class="next-step">
+      <h3>Next step</h3>
+      <p>No runs yet. Run <code>mlt train .</code> to train your first model.</p>
+    </div>`;
+  } else if (last.status === 'running') {
+    nextHtml = `<div class="next-step running">
+      <h3>Next step</h3>
+      <p>Training is in progress: <a href="#/run/${last.run_id}">${last.run_id}</a></p>
+    </div>`;
+  } else if (last.status === 'failed') {
+    const errSnippet = last.error
+      ? last.error.split('\n').slice(-2).join(' · ').slice(0, 120)
+      : 'unknown error';
+    nextHtml = `<div class="next-step failed">
+      <h3>Next step</h3>
+      <p>The last training failed: ${escHtml(errSnippet)}</p>
+      <a href="#/run/${last.run_id}" class="btn btn-secondary" style="margin-top:8px">View the log</a>
+    </div>`;
+  } else if (last.status === 'succeeded') {
+    nextHtml = `<div class="next-step">
+      <h3>Next step</h3>
+      <p>Last run succeeded. Run <code>mlt serve latest</code> to start the inference API.</p>
+      <a href="#/run/${last.run_id}" class="btn btn-secondary" style="margin-top:8px">View run details</a>
+    </div>`;
+  }
+
+  // Counts
+  const totalRuns = runs.length;
+  const lastRunLine = last
+    ? `<a href="#/run/${last.run_id}" style="font-family:var(--mono);font-size:12px">${last.run_id}</a>
+       <br>${badge(last.status)} (${age(last.created_at)})`
+    : '—';
+
+  $('#main').innerHTML = `
+    <h1 class="page-title">Home</h1>
+    <p class="page-sub">
+      <b style="font-family:var(--mono)">mlt</b> · <b>Model Lifecycle Toolkit</b>
+      <span style="font-weight:400;color:var(--fg3)"> version ${S.meta.version}</span>
+      &nbsp;—&nbsp;${S.meta.description}
+    </p>
+
+    ${nextHtml}
+
+    <div class="home-grid">
+      <div class="card">
+        <div class="card-title">Project</div>
+        <table class="kv">
+          ${kvRows([
+            ['folder',  `<span style="font-size:12px">${escHtml(S.project.dir)}</span>`],
+            ['python',  S.settings?.python_requested
+              ? `${S.settings.python_requested} (${S.settings.python_source})`
+              : '—'],
+            ['runner',  S.settings?.runner_display ?? '—'],
+            ['runs',    totalRuns],
+          ])}
+        </table>
+      </div>
+      <div class="card">
+        <div class="card-title">Now</div>
+        <table class="kv">
+          ${kvRows([
+            ['last run',  lastRunLine],
+            ['training',  trainStatus.status === 'running'
+              ? `<a href="#/train" style="color:var(--warn)">running — ${trainStatus.run_id ? escHtml(trainStatus.run_id) : 'starting…'}</a>`
+              : 'none in progress'],
+            ['verify',    verifyStatus.status === 'running'
+              ? `<a href="#/verify/${encodeURIComponent(verifyStatus.run_id)}" style="color:var(--warn)">running — ${escHtml(verifyStatus.run_id || '…')}</a>`
+              : 'none in progress'],
+            ['service',   serveStatus.status === 'running'
+              ? `<a href="#/serve" style="color:var(--success)">running — ${escHtml(serveStatus.url || '')}</a>`
+              : serveStatus.status === 'starting'
+              ? `<a href="#/serve" style="color:var(--warn)">starting…</a>`
+              : 'none in progress'],
+          ])}
+        </table>
+        <div style="margin-top:12px">
+          <a href="#/runs" class="btn btn-secondary">View all runs</a>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">New project</div>
+        <p style="font-size:12px;color:var(--fg3);margin-bottom:14px">
+          Create a new mlt project from a template. Files are copied to the folder you choose.
+        </p>
+        <a href="#/new" class="btn btn-secondary">New project →</a>
+      </div>
+    </div>`;
+}
+
+function escHtml(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ===================================================================
+// RUNS LIST
+// ===================================================================
+async function renderRuns() {
+  $('#main').innerHTML = '<div id="loading-state">Loading runs…</div>';
+
+  try {
+    [S.runs, S.verifyStatus] = await Promise.all([
+      api('/api/runs?limit=50'),
+      api('/api/verify/status').catch(() => ({ status: 'idle' })),
+    ]);
+  } catch (e) {
+    $('#main').innerHTML = `<div style="padding:24px;color:var(--fail)">${e.message}</div>`;
+    return;
+  }
+
+  buildRunsView();
+}
+
+function filteredRuns() {
+  if (!S.runs) return [];
+  if (S.statusFilter === 'all') return S.runs;
+  return S.runs.filter(r => r.status === S.statusFilter);
+}
+
+function buildRunsView() {
+  const rows = filteredRuns();
+  const cmpEnabled = S.selected.length === 2;
+  const cmpHref = cmpEnabled
+    ? `#/compare/${S.selected[0]}/${S.selected[1]}`
+    : '#/compare';
+
+  $('#main').innerHTML = `
+    <div class="runs-topbar">
+      <div>
+        <h1 class="page-title" style="margin-bottom:2px">Runs</h1>
+        <p class="page-sub" style="margin-bottom:0">List and inspect training runs.</p>
+      </div>
+      <div class="runs-topbar-actions">
+        <a href="${cmpEnabled ? cmpHref : '#'}" id="cmp-btn"
+          class="btn btn-secondary ${cmpEnabled ? '' : ''}"
+          ${cmpEnabled ? '' : 'aria-disabled="true"'}
+          style="${cmpEnabled ? '' : 'opacity:.45;cursor:not-allowed;pointer-events:none'}">
+          ${cmpEnabled ? 'Compare the 2 selected' : 'Compare (select 2)'}
+        </a>
+        <a href="#/train" class="btn btn-primary">New training run</a>
+      </div>
+    </div>
+
+    <div class="filter-chips">
+      <span class="chip ${S.statusFilter==='all'?'active':''}" data-filter="all">All</span>
+      <span class="chip ${S.statusFilter==='succeeded'?'active':''}" data-filter="succeeded">succeeded</span>
+      <span class="chip ${S.statusFilter==='failed'?'active':''}" data-filter="failed">failed</span>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th style="width:40px">Compare</th>
+          <th>run_id</th>
+          <th>Status</th>
+          <th>When</th>
+          <th>Duration</th>
+          <th>Metrics</th>
+          <th>Fingerprint</th>
+          <th></th>
+        </tr></thead>
+        <tbody>
+          ${rows.length ? rows.map(r => `
+            <tr class="clickable" data-id="${r.run_id}">
+              <td onclick="event.stopPropagation()">
+                <input type="checkbox" class="run-check" data-id="${r.run_id}"
+                  ${S.selected.includes(r.run_id) ? 'checked' : ''}
+                  onchange="toggleSelect('${r.run_id}', this.checked)">
+              </td>
+              <td style="font-family:var(--mono);font-size:12px">${escHtml(r.run_id)}</td>
+              <td>
+                ${badge(r.status)}
+                ${r.verification_of ? '<span class="badge-v">[V]</span>' : ''}
+                ${S.verifyStatus?.status === 'running' && S.verifyStatus.run_id === r.run_id
+                  ? '<span class="badge-verifying">↻ verifying</span>' : ''}
+              </td>
+              <td style="color:var(--fg3)">${age(r.created_at)}</td>
+              <td style="color:var(--fg3)">${dur(r.duration_s)}</td>
+              <td style="font-size:12px;line-height:1.5">${metricsCell(r.outputs?.metrics)}</td>
+              <td style="font-family:var(--mono);font-size:12px;color:var(--fg3)">${shortHash(r.fingerprint)}</td>
+              <td><a href="#/run/${r.run_id}" class="btn btn-ghost" style="padding:4px 10px;font-size:12px"
+                  onclick="event.stopPropagation()">Details</a></td>
+            </tr>`).join('') :
+            `<tr><td colspan="8"><div class="empty">No runs found.</div></td></tr>`
+          }
+        </tbody>
+      </table>
+      <div class="table-footer">
+        [V] marks a run created by <code>mlt verify</code>. An identical fingerprint between the original
+        and the verification shows the inputs are the same.
+      </div>
+    </div>`;
+
+  // Filter chips
+  $$('.chip[data-filter]').forEach(c => {
+    c.addEventListener('click', () => {
+      S.statusFilter = c.dataset.filter;
+      buildRunsView();
+    });
+  });
+
+  // Row click → detail
+  $$('tr.clickable[data-id]').forEach(tr => {
+    tr.addEventListener('click', e => {
+      if (e.target.type === 'checkbox') return;
+      location.hash = `#/run/${tr.dataset.id}`;
+    });
+  });
+}
+
+function toggleSelect(id, checked) {
+  if (checked) {
+    if (!S.selected.includes(id)) {
+      S.selected.push(id);
+      if (S.selected.length > 2) S.selected.shift();
+    }
+  } else {
+    S.selected = S.selected.filter(x => x !== id);
+  }
+  buildRunsView();
+}
+
+// ===================================================================
+// RUN DETAIL
+// ===================================================================
+async function renderRunDetail(runId) {
+  $('#main').innerHTML = '<div id="loading-state">Loading…</div>';
+
+  let m, logLines = [];
+  try {
+    m = await api(`/api/runs/${encodeURIComponent(runId)}`);
+    try {
+      const logResp = await api(`/api/runs/${encodeURIComponent(m.run_id)}/log`);
+      logLines = logResp.lines || [];
+    } catch(_) {}
+  } catch(e) {
+    $('#main').innerHTML = `<div style="padding:24px;color:var(--fail)">${e.message}</div>`;
+    return;
+  }
+
+  const inp = m.inputs || {};
+  const env = m.environment || {};
+  const out = m.outputs || {};
+  const params = inp.params?.values || {};
+  const paramsStr = Object.entries(params).map(([k,v])=>`${k}=${v}`).join(' ') || '—';
+  const dataFiles = inp.data?.files ? Object.keys(inp.data.files).length : null;
+  const depsCount = inp.deps?.lock ? inp.deps.lock.length : null;
+
+  // Error section (failed runs)
+  const errorHtml = m.error ? `
+    <div class="error-box">
+      <h3>Execution error (exit 4)</h3>
+      <p>${escHtml(m.error.split('\n').filter(Boolean).pop() || m.error)}</p>
+      <p class="hint">The run was recorded as failed, with its log preserved. Fix <code>model.py</code> or the data and train again.</p>
+    </div>
+    ${logLines.length ? `
+    <div class="log-section">
+      <h4>train.log (last lines)</h4>
+      <div class="log-block">${escHtml(logLines.join('\n'))}</div>
+    </div>` : ''}` : '';
+
+  const canServe = m.status === 'succeeded';
+  const actionsHtml = `
+    <div class="detail-actions">
+      ${canServe
+        ? `<a href="#/verify/${escHtml(m.run_id)}" class="btn btn-secondary">Verify reproducibility</a>`
+        : `<button class="btn btn-secondary" disabled aria-disabled="true">Verify reproducibility</button>`}
+      ${canServe
+        ? `<button class="btn btn-primary" onclick="confirmStartServe('${escHtml(m.run_id)}');location.hash='#/serve'">Serve this run</button>`
+        : `<button class="btn btn-primary" disabled aria-disabled="true">Serve this run</button>`}
+    </div>`;
+
+  // Inputs card
+  const inputsCard = `
+    <div class="card">
+      <div class="card-title">Inputs</div>
+      <table class="kv">
+        ${kvRows([
+          ['seed',   inp.seed != null ? `${inp.seed}${inp.seed_source ? ` (${inp.seed_source})` : ''}` : '—'],
+          ['python', inp.python?.requested ? `${inp.python.requested}${inp.python?.source ? ` (${inp.python.source})` : ''}` : '—'],
+          ['code',   inp.code?.hash ? `${shortHash(inp.code.hash)}${inp.code.git_commit ? ` commit ${inp.code.git_commit.slice(0,8)}` : ''}` : '—'],
+          ['params', paramsStr],
+          ['data',   dataFiles != null ? `${dataFiles} file${dataFiles!==1?'s':''} hash ${shortHash(inp.data?.hash)}` : '—'],
+          ['deps',   depsCount != null ? `${depsCount} packages (lock in manifest)` : '—'],
+        ])}
+      </table>
+    </div>`;
+
+  // Environment card
+  const envCard = `
+    <div class="card">
+      <div class="card-title">Environment</div>
+      <table class="kv">
+        ${kvRows([
+          ['runner',    env.runner ?? '—'],
+          ['isolation', env.isolation ?? '—'],
+          ['python',    env.python ?? '—'],
+          ['image',     env.env_hash ? `sha256:${env.env_hash.slice(0,8)}…` : '—'],
+        ])}
+      </table>
+      ${out.metrics || (m.status === 'failed') ? `
+      <div class="card-title" style="margin-top:16px">Results</div>
+      ${out.metrics && Object.keys(out.metrics).length
+        ? Object.entries(out.metrics).map(([k,v]) =>
+            `<div><span class="metric-name">${k}</span><br>
+             <span class="metric-value">${typeof v === 'number' ? v.toFixed(4) : v}</span></div>`
+          ).join('<hr style="border:none;border-top:1px solid var(--border);margin:8px 0">')
+        : '<p style="font-size:13px;color:var(--fg3)">No metrics: the training failed before finishing.</p>'
+      }
+      ${out.artifacts ? `<div class="artifact-path">${Object.values(out.artifacts).join('<br>')}</div>` : ''}
+      ` : ''}
+    </div>`;
+
+  $('#main').innerHTML = `
+    <a href="#/runs" class="back-btn">← Runs</a>
+
+    <div class="detail-header">
+      <div class="detail-header-left">
+        <h1>${escHtml(m.run_id)}</h1>
+        <div class="meta">
+          ${badge(m.status)}
+          <span>${age(m.created_at)} · ${dur(m.duration_s)}</span>
+          ${m.verification_of ? `<span class="badge-v" style="font-size:12px">[V] verifies <a href="#/run/${m.verification_of}" style="font-size:12px">${shortId(m.verification_of)}</a></span>` : ''}
+        </div>
+      </div>
+      ${actionsHtml}
+    </div>
+
+    ${errorHtml}
+
+    <div class="detail-grid">
+      ${inputsCard}
+      ${envCard}
+    </div>
+
+    ${m.fingerprint ? `<p class="fingerprint-line">Full fingerprint: <code>${m.fingerprint}</code></p>` : ''}`;
+}
+
+// ===================================================================
+// VERIFY
+// ===================================================================
+
+let _verifyPollTimer = null;
+
+async function renderVerify(runId) {
+  $('#main').innerHTML = '<div id="loading-state">Loading…</div>';
+
+  let orig, snap;
+  try {
+    orig = await api(`/api/runs/${encodeURIComponent(runId)}`);
+  } catch (e) {
+    $('#main').innerHTML = `<div style="padding:24px;color:var(--fail)">${e.message}</div>`;
+    return;
+  }
+
+  try { snap = await api('/api/verify/status'); } catch (_) { snap = { status: 'idle' }; }
+
+  // If a different run is being verified, treat as idle for this run.
+  if (snap.run_id && snap.run_id !== orig.run_id) snap = { status: 'idle' };
+
+  buildVerifyView(orig, snap);
+
+  if (snap.status === 'running') startVerifyPoll(orig);
+}
+
+function buildVerifyView(orig, snap) {
+  clearVerifyPoll();
+
+  const origCard = `
+    <div class="card" style="margin-bottom:0">
+      <div class="card-title">Run to verify</div>
+      <table class="kv">
+        ${kvRows([
+          ['run_id',   `<a href="#/run/${escHtml(orig.run_id)}" class="mono">${escHtml(orig.run_id)}</a>`],
+          ['status',   badge(orig.status)],
+          ['metrics',  metricsCell(orig.outputs?.metrics) || '—'],
+          ['fp',       orig.fingerprint ? orig.fingerprint.slice(0, 16) + '…' : '—'],
+        ])}
+      </table>
+    </div>`;
+
+  const origRunner = orig.environment?.runner || 'auto';
+  const verifyRunners = S.system?.runners || ['auto', 'venv', 'docker'];
+  const verifyRunnerPills = verifyRunners.map(r =>
+    `<span class="chip verify-runner-pill ${r === origRunner ? 'active' : ''}"
+      data-runner="${r}" onclick="_selectVerifyRunner('${r}')">${r}</span>`
+  ).join('');
+
+  let statusCard = '';
+  if (snap.status === 'idle') {
+    statusCard = `
+      <div class="card" style="margin-bottom:0">
+        <div class="card-title" style="margin-bottom:8px">Verify reproducibility</div>
+        <p style="font-size:13px;color:var(--fg2);margin-bottom:14px">
+          Re-trains the model from the run's code snapshot using the original seed and Python.
+          Compares the fingerprint and metrics (fixed relative tolerance).
+        </p>
+        <div style="font-size:12px;color:var(--fg3);margin-bottom:6px">
+          Runner <span style="color:var(--fg3);font-weight:400">(default: same as original — <code>${escHtml(origRunner)}</code>)</span>
+        </div>
+        <div class="filter-chips" style="margin-bottom:16px">${verifyRunnerPills}</div>
+        <button class="btn btn-primary" id="start-verify-btn" onclick="_startVerify('${escHtml(orig.run_id)}')">
+          Start verification
+        </button>
+        <div id="verify-error-msg" style="display:none;margin-top:8px;font-size:13px;color:var(--fail)"></div>
+      </div>`;
+  } else if (snap.status === 'running') {
+    const phase = snap.new_run_id ? 'Re-training…' : 'Building environment…';
+    statusCard = `
+      <div class="card" style="margin-bottom:0" id="verify-status-card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <div>
+            <div class="card-title" style="margin-bottom:4px" id="verify-phase">${phase}</div>
+            <div style="font-size:12px;color:var(--fg3)" id="verify-run-id">
+              ${snap.new_run_id
+                ? `<span class="mono">${escHtml(snap.new_run_id)}</span>`
+                : '<span style="color:var(--fg3)">new run will appear after environment is ready</span>'}
+            </div>
+          </div>
+          <button class="btn btn-ghost" onclick="cancelVerify()"
+            style="border-color:var(--fail);color:var(--fail);flex-shrink:0">Cancel</button>
+        </div>
+        <div id="verify-steps-list" style="margin-bottom:12px">${_renderSteps(snap.steps)}</div>
+        <div class="log-section">
+          <h4 id="verify-log-label">${snap.new_run_id ? 'train.log' : 'build.log'}</h4>
+          <div class="log-block" id="verify-log-block">(waiting for output…)</div>
+        </div>
+      </div>`;
+  } else if (snap.status === 'done' && snap.result) {
+    const r = snap.result;
+    const reproduced = r.reproduced;
+    const color = reproduced ? 'var(--success)' : 'var(--fail)';
+    const icon  = reproduced ? '✓' : '✗';
+    const label = reproduced ? 'Reproduced' : 'Diverged';
+
+    let diffHtml = '';
+    if (!r.fingerprint_match) {
+      diffHtml += `<p style="font-size:13px;margin-top:8px">
+        fingerprint: <code>${(r.orig_fingerprint || '').slice(0,8)}</code>
+        ≠ <code>${(r.new_fingerprint || '').slice(0,8)}</code></p>`;
+    }
+    (r.metric_diffs || []).forEach(d => {
+      diffHtml += `<p style="font-size:13px;margin-top:4px;font-family:var(--mono)">${escHtml(d)}</p>`;
+    });
+
+    statusCard = `
+      <div class="card" style="border-color:${color};margin-bottom:0">
+        <div class="card-title" style="color:${color}">${icon} ${label}</div>
+        ${diffHtml}
+        <p style="font-size:13px;margin-top:12px">
+          Verification run:
+          <a href="#/run/${escHtml(snap.new_run_id)}" class="mono">${escHtml(snap.new_run_id)}</a>
+        </p>
+        <div style="display:flex;gap:10px;margin-top:12px">
+          <a href="#/run/${escHtml(snap.new_run_id)}" class="btn btn-secondary">View verification run</a>
+          <button class="btn btn-ghost" onclick="_startVerify('${escHtml(orig.run_id)}')">Run again</button>
+        </div>
+      </div>`;
+  } else if (snap.status === 'failed') {
+    statusCard = `
+      <div class="card" style="border-color:var(--fail);margin-bottom:0">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div class="card-title" style="color:var(--fail)">Verification failed</div>
+          <button class="btn btn-ghost" style="font-size:12px;padding:4px 10px"
+            onclick="dismissVerify()">Dismiss</button>
+        </div>
+        <p style="font-size:13px;color:var(--fg2);margin:4px 0 12px">${escHtml(snap.error || 'Unknown error')}</p>
+        <button class="btn btn-secondary" onclick="_startVerify('${escHtml(orig.run_id)}')">Try again</button>
+      </div>`;
+  }
+
+  // When idle: two-column grid (compact). When active: stacked full-width.
+  const layout = snap.status === 'idle'
+    ? `<div class="detail-grid">${origCard}${statusCard}</div>`
+    : `${origCard}<div style="margin-top:16px">${statusCard}</div>`;
+
+  $('#main').innerHTML = `
+    <a href="#/run/${escHtml(orig.run_id)}" class="back-btn">← Run detail</a>
+    <h1 class="page-title">Verify</h1>
+    <p class="page-sub">Re-train from the run's snapshot and check reproducibility.</p>
+    ${layout}`;
+
+  if (snap.status === 'running') startVerifyPoll(orig);
+}
+
+function _selectVerifyRunner(r) {
+  $$('.verify-runner-pill').forEach(el => el.classList.toggle('active', el.dataset.runner === r));
+}
+
+async function _startVerify(runId) {
+  const active = $('.verify-runner-pill.active');
+  const runner = active ? active.dataset.runner : null;
+  const btn = $('#start-verify-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Starting…'; }
+  try {
+    const r = await fetch(`/api/verify/${encodeURIComponent(runId)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ runner }),
+    });
+    if (!r.ok) {
+      let msg = r.statusText;
+      try { msg = (await r.json()).detail || msg; } catch (_) {}
+      throw new Error(msg);
+    }
+    const snap = await api('/api/verify/status');
+    const orig = await api(`/api/runs/${encodeURIComponent(runId)}`);
+    buildVerifyView(orig, snap);
+  } catch (e) {
+    const errEl = $('#verify-error-msg');
+    if (errEl) { errEl.style.display = 'block'; errEl.textContent = e.message; }
+    if (btn) { btn.disabled = false; btn.textContent = 'Start verification'; }
+  }
+}
+
+async function cancelVerify() {
+  const confirmed = await showModal({
+    title: 'Cancel verification',
+    body: 'The verification run will be marked as failed.',
+    confirmLabel: 'Cancel verification',
+    danger: true,
+  });
+  if (!confirmed) return;
+  try { await fetch('/api/verify', { method: 'DELETE' }); } catch (_) {}
+  const snap = await api('/api/verify/status');
+  const orig = await api(`/api/runs/${encodeURIComponent(snap.run_id)}`);
+  buildVerifyView(orig, snap);
+}
+
+function startVerifyPoll(orig) {
+  _verifyPollTimer = setInterval(async () => {
+    try {
+      const snap = await api('/api/verify/status');
+
+      if (snap.status !== 'running') {
+        clearVerifyPoll();
+        // Only rebuild if the user is still on this verify page; avoid hijacking
+        // other pages when verify finishes in the background.
+        if (location.hash.startsWith(`#/verify/${encodeURIComponent(orig.run_id)}`)) {
+          buildVerifyView(orig, snap);
+        }
+        return;
+      }
+
+      const phaseEl  = $('#verify-phase');
+      const runIdEl  = $('#verify-run-id');
+      const stepsEl  = $('#verify-steps-list');
+      const labelEl  = $('#verify-log-label');
+      const logBlock = $('#verify-log-block');
+      const building = !snap.new_run_id;
+
+      if (phaseEl) phaseEl.textContent = building ? 'Building environment…' : 'Re-training…';
+      if (runIdEl && snap.new_run_id) {
+        runIdEl.innerHTML = `<span class="mono">${escHtml(snap.new_run_id)}</span>`;
+      }
+      if (stepsEl && snap.steps) stepsEl.innerHTML = _renderSteps(snap.steps);
+      if (labelEl) labelEl.textContent = building ? 'build.log' : 'train.log';
+      if (logBlock) {
+        try {
+          // During build: read the snapshot's own build.log (not the project root's).
+          // Once new_run_id is set the run record exists and train.log is live.
+          const url = building
+            ? '/api/verify/log?tail=40'
+            : `/api/runs/${encodeURIComponent(snap.new_run_id)}/log?tail=40`;
+          const logData = await api(url);
+          const lines = logData.lines || [];
+          logBlock.textContent = lines.length ? lines.join('\n') : '(no output yet)';
+          logBlock.scrollTop = logBlock.scrollHeight;
+        } catch (_) {}
+      }
+    } catch (_) {}
+  }, 5000);
+}
+
+function clearVerifyPoll() {
+  if (_verifyPollTimer) { clearInterval(_verifyPollTimer); _verifyPollTimer = null; }
+}
+
+// ===================================================================
+// COMPARE
+// ===================================================================
+async function renderCompare(preA, preB) {
+  $('#main').innerHTML = '<div id="loading-state">Loading…</div>';
+
+  let runs = S.runs;
+  if (!runs) {
+    try { runs = S.runs = await api('/api/runs?limit=50'); }
+    catch (e) {
+      $('#main').innerHTML = `<div style="padding:24px;color:var(--fail)">${e.message}</div>`;
+      return;
+    }
+  }
+
+  // Resolve preselected run_ids (may be short ids from S.selected)
+  const findRun = (candidate) => {
+    if (!candidate) return null;
+    return runs.find(r => r.run_id === candidate || r.run_id.endsWith(candidate));
+  };
+
+  let selA = findRun(preA || S.selected[0]) || null;
+  let selB = findRun(preB || S.selected[1]) || null;
+
+  async function loadAndRender() {
+    let diffData = null;
+    if (selA && selB && selA.run_id !== selB.run_id) {
+      try {
+        diffData = await api(`/api/diff/${encodeURIComponent(selA.run_id)}/${encodeURIComponent(selB.run_id)}`);
+      } catch (e) {
+        diffData = { error: e.message };
+      }
+    }
+    renderCompareView(runs, selA, selB, diffData);
+  }
+
+  window._compareSelectA = async (id) => {
+    selA = runs.find(r => r.run_id === id) || null;
+    await loadAndRender();
+  };
+  window._compareSelectB = async (id) => {
+    selB = runs.find(r => r.run_id === id) || null;
+    await loadAndRender();
+  };
+
+  await loadAndRender();
+}
+
+// ===================================================================
+// NEW PROJECT
+// ===================================================================
+
+async function renderNewProject() {
+  $('#main').innerHTML = '<div id="loading-state">Loading…</div>';
+  let templates = {};
+  try { templates = await api('/api/templates'); } catch (_) {}
+  _buildNewProjectView(null, null, null, templates);
+}
+
+function _buildNewProjectView(selectedTemplate, result, errorMsg, templates) {
+  // templates may be passed in or carried from window state.
+  if (templates) window._newProjTemplates = templates;
+  const tDefs = window._newProjTemplates || {};
+  const tmpl = selectedTemplate || Object.keys(tDefs)[0] || 'iris';
+  const files = tDefs[tmpl] || [];
+  const fileRows = files.map(f =>
+    `<tr><td style="font-family:var(--mono);font-size:12px">${escHtml(f.name)}</td>
+         <td style="font-size:12px;color:var(--fg2)">${escHtml(f.description)}</td></tr>`
+  ).join('');
+
+  const templatePills = Object.keys(tDefs).map(t =>
+    `<span class="chip ${t === tmpl ? 'active' : ''}"
+      style="cursor:pointer" onclick="_selectTemplate('${t}')">${escHtml(t)}</span>`
+  ).join('') +
+  (tDefs['blank'] ? '' :
+    `<span class="chip" style="opacity:.45;cursor:not-allowed" title="P2 — not yet implemented">blank</span>`);
+
+  let resultHtml = '';
+  if (result) {
+    const createdRows = result.files.map(f =>
+      `<tr><td style="font-family:var(--mono);font-size:12px">${escHtml(f.name)}</td>
+           <td style="font-size:12px;color:var(--fg2)">${escHtml(f.description)}</td></tr>`
+    ).join('');
+    resultHtml = `
+      <div class="card" style="border-color:var(--success);margin-bottom:16px">
+        <div class="card-title" style="color:var(--success)">Project created</div>
+        <p style="font-size:13px;margin-bottom:12px;font-family:var(--mono)">${escHtml(result.directory)}</p>
+        <div class="table-wrap" style="margin-bottom:12px">
+          <table>
+            <thead><tr><th>File</th><th>Description</th></tr></thead>
+            <tbody>${createdRows}</tbody>
+          </table>
+        </div>
+        <div style="border-left:4px solid var(--warn);background:var(--warn-bg);
+            border-radius:0 var(--r) var(--r) 0;padding:12px 14px;margin-top:4px">
+          <strong style="font-size:13px;color:var(--warn)">To open this project in the UI</strong>
+          <p style="font-size:13px;margin-top:4px">
+            The UI does not support switching projects at runtime.
+            Restart the server with:<br>
+            <code style="font-size:12px">mlt ui ${escHtml(result.directory)}</code>
+          </p>
+        </div>
+      </div>`;
+  }
+
+  const errorHtml = errorMsg
+    ? `<div style="color:var(--fail);font-size:13px;margin-bottom:12px">${escHtml(errorMsg)}</div>` : '';
+
+  $('#main').innerHTML = `
+    <h1 class="page-title">New project</h1>
+    <p class="page-sub">Create a new mlt project from a template.</p>
+
+    ${resultHtml}
+
+    <div class="detail-grid">
+      <div class="card" style="margin-bottom:0">
+        <div class="card-title">Settings</div>
+
+        <label style="font-size:12px;color:var(--fg3);display:block;margin-bottom:4px">Folder (absolute path)</label>
+        <input type="text" id="new-proj-dir" placeholder="/home/user/my-project"
+          value="" style="margin-bottom:14px">
+
+        <div style="font-size:12px;color:var(--fg3);margin-bottom:6px">Template</div>
+        <div class="filter-chips" style="margin-bottom:16px">${templatePills}</div>
+
+        ${errorHtml}
+        <button class="btn btn-primary" id="create-proj-btn" onclick="_doCreateProject()">
+          Create project
+        </button>
+      </div>
+
+      <div class="card" style="margin-bottom:0">
+        <div class="card-title">Files that will be created</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>File</th><th>Description</th></tr></thead>
+            <tbody id="new-proj-files">${fileRows}</tbody>
+          </table>
+        </div>
+        <div style="border-left:3px solid var(--sb-text2,#7ea89e);padding:8px 12px;
+            margin-top:12px;font-size:12px;color:var(--fg2)">
+          After creation, run <code>mlt train &lt;folder&gt;</code> to train from the CLI,
+          or restart the UI with <code>mlt ui &lt;folder&gt;</code> to open it here
+          — the UI serves one project at a time.
+        </div>
+      </div>
+    </div>`;
+
+  // Store current template selection so _doCreateProject can read it.
+  window._newProjTemplate = tmpl;
+}
+
+function _selectTemplate(tmpl) {
+  const dir = ($('#new-proj-dir') || {}).value || '';
+  _buildNewProjectView(tmpl, null, null);
+  // Restore whatever the user typed.
+  const inp = $('#new-proj-dir');
+  if (inp) inp.value = dir;
+  window._newProjTemplate = tmpl;
+}
+
+async function _doCreateProject() {
+  const dir = (($('#new-proj-dir') || {}).value || '').trim();
+  const tmpl = window._newProjTemplate || 'iris';
+
+  if (!dir) {
+    _buildNewProjectView(tmpl, null, 'Folder path is required.');
+    return;
+  }
+
+  const btn = $('#create-proj-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Creating…'; }
+
+  try {
+    const r = await fetch('/api/init', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ directory: dir, template: tmpl }),
+    });
+    const data = await r.json();
+    if (!r.ok) {
+      _buildNewProjectView(tmpl, null, data.detail || `Error ${r.status}`);
+      return;
+    }
+    _buildNewProjectView(tmpl, data, null);
+  } catch (e) {
+    _buildNewProjectView(tmpl, null, String(e));
+  }
+}
+
+function renderCompareView(runs, selA, selB, diffData) {
+  const pillsA = runs.slice(0, 6).map(r => `
+    <span class="pill ${selA && selA.run_id === r.run_id ? 'selected' : ''}"
+      onclick="window._compareSelectA('${r.run_id}')">${shortId(r.run_id)}</span>`).join('');
+  const pillsB = runs.slice(0, 6).map(r => `
+    <span class="pill ${selB && selB.run_id === r.run_id ? 'selected' : ''}"
+      onclick="window._compareSelectB('${r.run_id}')">${shortId(r.run_id)}</span>`).join('');
+
+  let diffHtml = '';
+  if (!selA || !selB) {
+    diffHtml = '<div class="card"><p style="color:var(--fg3);padding:8px">Select Run A and Run B above to compare.</p></div>';
+  } else if (selA.run_id === selB.run_id) {
+    diffHtml = '<div class="card"><p style="color:var(--fg3);padding:8px">Select two different runs.</p></div>';
+  } else if (diffData?.error) {
+    diffHtml = `<div class="card"><p style="color:var(--fail)">${diffData.error}</p></div>`;
+  } else if (diffData) {
+    const fpBannerHtml = diffData.fingerprint_match
+      ? `<div class="fp-banner match">
+          <span style="font-weight:700;color:var(--success)">✓ fingerprint: identical</span>
+          <span style="color:var(--fg2);margin-left:8px">The inputs that determine training are the same.</span>
+         </div>`
+      : `<div class="fp-banner diff">
+          <span class="fp-label">fingerprint: different (${(diffData.fingerprint_components||[]).join(', ')})</span>
+          <span class="fp-hint">This is what changed in the inputs.</span>
+         </div>`;
+
+    // Build flat rows: [section, field, valA, valB, diffStr]
+    const tableRows = [];
+
+    (diffData.param_diffs || []).forEach(([k, a, b]) => {
+      tableRows.push(['params', k, a, b, `${a} → ${b}`]);
+    });
+    if (diffData.code_hash_diff) {
+      tableRows.push(['code', 'hash', shortHash(diffData.code_hash_diff[0]), shortHash(diffData.code_hash_diff[1]), null]);
+    }
+    if (diffData.code_commit_diff) {
+      tableRows.push(['code', 'commit', diffData.code_commit_diff[0]?.slice(0,8), diffData.code_commit_diff[1]?.slice(0,8), null]);
+    }
+    if (diffData.data_hash_diff) {
+      tableRows.push(['data', 'hash', shortHash(diffData.data_hash_diff[0]), shortHash(diffData.data_hash_diff[1]), null]);
+    }
+    if (diffData.seed_diff) {
+      tableRows.push(['seed', 'seed', diffData.seed_diff[0], diffData.seed_diff[1], `${diffData.seed_diff[0]} → ${diffData.seed_diff[1]}`]);
+    }
+    if (diffData.python_diff) {
+      tableRows.push(['python', 'requested', diffData.python_diff[0], diffData.python_diff[1], null]);
+    }
+    if (diffData.deps_hash_diff) {
+      tableRows.push(['deps', 'hash', shortHash(diffData.deps_hash_diff[0]), shortHash(diffData.deps_hash_diff[1]), null]);
+    }
+    (diffData.env_diffs || []).forEach(([k, a, b]) => {
+      tableRows.push(['environment', k, a, b, null]);
+    });
+    (diffData.metric_diffs || []).forEach(([k, a, b]) => {
+      let delta = '';
+      if (typeof a === 'number' && typeof b === 'number') {
+        const d = b - a;
+        delta = `Δ ${d >= 0 ? '+' : ''}${d.toFixed(4)}`;
+      }
+      tableRows.push(['metrics', k, a != null ? a.toFixed(4) : '—', b != null ? b.toFixed(4) : '—', delta]);
+    });
+
+    const tableHtml = tableRows.length ? `
+      <div class="table-wrap">
+        <table class="cmp-table">
+          <thead><tr>
+            <th>Section</th><th>Field</th>
+            <th>Run A — ${shortId(selA.run_id)}</th>
+            <th>Run B — ${shortId(selB.run_id)}</th>
+            <th>Difference</th>
+          </tr></thead>
+          <tbody>
+            ${tableRows.map(([sec, field, va, vb, diff]) => `
+              <tr>
+                <td style="font-weight:700;color:var(--fg2)">${sec}</td>
+                <td style="font-family:var(--mono);font-size:12px">${field}</td>
+                <td style="font-family:var(--mono);font-size:12px">${va ?? '—'}</td>
+                <td style="font-family:var(--mono);font-size:12px">${vb ?? '—'}</td>
+                <td class="cmp-diff-val">${diff || ''}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>` : `<div class="card"><p style="color:var(--fg3);padding:8px">No differences found across inputs, environment and metrics.</p></div>`;
+
+    diffHtml = fpBannerHtml + tableHtml;
+  }
+
+  $('#main').innerHTML = `
+    <h1 class="page-title">Compare runs</h1>
+    <p class="page-sub">Compare two runs and show what changed.</p>
+
+    <div class="compare-pickers">
+      <div class="card" style="margin-bottom:0">
+        <div class="picker-label">Run A</div>
+        <div class="picker-pills">${pillsA}</div>
+      </div>
+      <div class="card" style="margin-bottom:0">
+        <div class="picker-label">Run B</div>
+        <div class="picker-pills">${pillsB}</div>
+      </div>
+    </div>
+    <div style="margin-bottom:16px"></div>
+
+    ${diffHtml}`;
+}
+</script>
+</body>
+</html>

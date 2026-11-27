@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import os
+import sys
+import threading
+import time
 from pathlib import Path
 
 import click
@@ -30,7 +33,7 @@ from mlt.cli.discovery import require_project_dir
 @click.option("--force", is_flag=True, default=False,
               help="Re-train even if an identical run already exists.")
 @click.option("--verbose", is_flag=True, default=False,
-              help="Print the training log to the terminal after training.")
+              help="Stream the training log to the terminal in real time.")
 def train_cmd(
     directory: str,
     data_dir: str | None,
@@ -73,6 +76,63 @@ def train_cmd(
 
     click.echo("  training...")
 
+    # --verbose: stream build.log then train.log in real time.
+    # Phase 1 (build env): tail project/.mlt/build.log from the moment train()
+    # is called; the trainer deletes any previous build.log before starting.
+    # Phase 2 (fit):       switch to run_dir/train.log when on_run_created fires.
+    def _tail_file(log_path: Path, stop: threading.Event) -> None:
+        """Read log_path continuously until stop is set, then drain and exit."""
+        deadline = time.monotonic() + 10.0
+        while not log_path.exists() and time.monotonic() < deadline:
+            time.sleep(0.05)
+        try:
+            with log_path.open(encoding="utf-8", errors="replace") as fh:
+                while not stop.is_set():
+                    chunk = fh.read(4096)
+                    if chunk:
+                        sys.stdout.write(chunk)
+                        sys.stdout.flush()
+                    else:
+                        time.sleep(0.1)
+                # Drain remaining output after stop is signalled.
+                remainder = fh.read()
+                if remainder:
+                    sys.stdout.write(remainder)
+                    sys.stdout.flush()
+        except OSError:
+            pass  # file disappeared (e.g. run removed on contract error)
+
+    _stop_build = threading.Event()
+    _stop_train = threading.Event()
+    _build_thread: threading.Thread | None = None
+    _train_thread: threading.Thread | None = None
+
+    if verbose:
+        sys.stdout.write("\n--- build.log ---\n")
+        sys.stdout.flush()
+        _build_thread = threading.Thread(
+            target=_tail_file,
+            args=(project_dir / ".mlt" / "build.log", _stop_build),
+            daemon=True,
+        )
+        _build_thread.start()
+
+    def _on_run_created(rid: str) -> None:
+        nonlocal _train_thread
+        # Stop build log streaming and switch to train log.
+        if verbose:
+            _stop_build.set()
+            if _build_thread is not None:
+                _build_thread.join(timeout=2.0)
+            sys.stdout.write("\n--- train.log ---\n")
+            sys.stdout.flush()
+            _train_thread = threading.Thread(
+                target=_tail_file,
+                args=(project_dir / ".mlt" / "runs" / rid / "train.log", _stop_train),
+                daemon=True,
+            )
+            _train_thread.start()
+
     from mlt.core.trainer import train
 
     run_id = train(
@@ -85,7 +145,13 @@ def train_cmd(
         force=force,
         env=os.environ,
         on_slow_build=_on_slow_build,
+        on_run_created=_on_run_created,
     )
+
+    # Stop train log streaming and wait for drain.
+    _stop_train.set()
+    if _train_thread is not None:
+        _train_thread.join(timeout=2.0)
 
     # Load the manifest to show the summary.
     from mlt.runstore.store import RunStore
@@ -111,9 +177,3 @@ def train_cmd(
     click.echo(f"  mlt runs show {run_id}")
     click.echo(f"  mlt serve {run_id}")
 
-    if verbose:
-        log_path = store.run_dir(run_id) / "train.log"
-        if log_path.exists():
-            click.echo()
-            click.echo("--- train.log ---")
-            click.echo(log_path.read_text(encoding="utf-8", errors="replace"))

@@ -65,6 +65,7 @@ class DockerRunner(Runner):
         self._requirements_txt = requirements_txt
         self._python_minor = python_minor
         self._env_hash_val: str | None = None
+        self._current_proc: subprocess.Popen | None = None  # for terminate()
 
     # ------------------------------------------------------------------
     # Runner interface
@@ -86,7 +87,11 @@ class DockerRunner(Runner):
             self._env_hash_val = env_hash(deps_h, self._python_minor)
         return self._env_hash_val
 
-    def build_env(self, on_slow_build: Callable[[], None] | None = None) -> str:
+    def build_env(
+        self,
+        on_slow_build: Callable[[], None] | None = None,
+        log_path: Path | None = None,
+    ) -> str:
         """Build the Docker image if not cached. Returns pip freeze output."""
         from mlt.core.errors import MltEnvironmentError
 
@@ -94,7 +99,7 @@ class DockerRunner(Runner):
         if not self._image_exists(tag):
             if on_slow_build:
                 on_slow_build()
-            self._build_image(tag)
+            self._build_image(tag, log_path=log_path)
 
         result = subprocess.run(
             ["docker", "run", "--rm", tag, "pip", "freeze", "--all"],
@@ -163,6 +168,16 @@ class DockerRunner(Runner):
         except subprocess.TimeoutExpired:
             return _TIMEOUT_EXIT_CODE, "deep check timed out"
 
+    def terminate(self) -> None:
+        """Terminate the current subprocess if one is running."""
+        proc = self._current_proc
+        if proc is not None and proc.poll() is None:
+            proc.terminate()
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
@@ -177,7 +192,7 @@ class DockerRunner(Runner):
         )
         return result.returncode == 0
 
-    def _build_image(self, tag: str) -> None:
+    def _build_image(self, tag: str, log_path: Path | None = None) -> None:
         from mlt.core.errors import MltEnvironmentError
 
         with tempfile.TemporaryDirectory() as ctx:
@@ -193,15 +208,26 @@ class DockerRunner(Runner):
                 _make_dockerfile(self._python_minor), encoding="utf-8"
             )
 
-            result = subprocess.run(
-                ["docker", "build", "-t", tag, "."],
-                capture_output=True,
-                text=True,
-                cwd=ctx,
-            )
+            cmd = ["docker", "build", "-t", tag, "."]
+            if log_path is None:
+                proc = subprocess.Popen(
+                    cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, cwd=ctx,
+                )
+                self._current_proc = proc
+                stdout, _ = proc.communicate()
+                error_detail = stdout[-1000:]
+            else:
+                lf = open(log_path, "ab")  # noqa: WPS515 — kept open for the subprocess duration
+                try:
+                    proc = subprocess.Popen(cmd, stdout=lf, stderr=subprocess.STDOUT, cwd=ctx)
+                    self._current_proc = proc
+                    proc.wait()
+                finally:
+                    lf.close()
+                error_detail = (
+                    "\n".join(log_path.read_text(errors="replace").splitlines()[-30:])
+                    if log_path.exists() else ""
+                )
 
-        if result.returncode != 0:
-            raise MltEnvironmentError(
-                f"docker build failed:\n"
-                f"{(result.stderr + result.stdout)[-1000:]}"
-            )
+        if proc.returncode != 0:
+            raise MltEnvironmentError(f"docker build failed:\n{error_detail}")

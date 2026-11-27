@@ -181,6 +181,28 @@ The `/predict` endpoint uses `Request` as its parameter type to retain manual co
 **`init` accepts any dot-prefixed entry, not a named whitelist.**
 The original check used `_SAFE = {".venv", ".git", ".DS_Store"}` and blocked any other hidden entry. Any real project directory (with `.python-version`, `.mypy_cache`, etc.) would fail even before running `mlt init`. The rule was simplified to `name.startswith(".")`: hidden entries coexist, visible entries signal an occupied project directory.
 
+## Implementation decisions (Web UI — v0.3.0, experimental)
+
+> The Web UI has no automated test coverage and is considered experimental. The decisions below apply to its current implementation.
+
+**FastAPI SPA with hash routing, single HTML file.**
+The UI is a single `index.html` served by the same FastAPI app that exposes the JSON API. Navigation is hash-based (`#/train`, `#/verify/<id>`) so the server never needs to handle frontend routes. Alternative: a separate frontend build (Vite/React) — rejected because it adds a build step and a second process to a local-only tool that already has FastAPI as a dependency.
+
+**Thread-safe state objects (`_TrainState`, `_VerifyState`, `_ServeState`) instead of shared dicts.**
+Each long-running operation runs in a background thread and writes to a small state object behind a `threading.Lock`. The API endpoints only read snapshots (`snapshot() → dict`). The alternative (asyncio) would have required either running blocking `train()` in a thread pool anyway, or making the entire core async — not worth it for a local-only UI with one user.
+
+**`on_step` and `on_run_created` callbacks in `trainer.train()`.**
+The UI needs to update the progress display incrementally: step names as they start, and the new run_id as soon as the run record exists (before training completes). Both are injected as optional callbacks with `None` defaults, so the CLI and tests are unaffected. The `on_run_created` callback in particular lets the verify page switch from `build.log` to `train.log` as soon as the run record is created, without polling the store.
+
+**`/api/system` as single source of truth for UI defaults.**
+Runner names, default port, default timeout, and step list are module-level constants in `app.py`, exported via `GET /api/system`. The frontend never hardcodes these values. Any future addition to `_TRAIN_STEPS` requires a matching `_step()` call in `trainer.py` (enforced by a cross-reference comment in both files) but is otherwise automatic in the UI.
+
+**Verify build log reads from the snapshot directory, not the project root.**
+`verify_run()` calls `train()` with `project_dir=run_dir/code/`, so `build.log` is written to `run_dir/code/.mlt/build.log`, not to the live project's `.mlt/`. A dedicated `GET /api/verify/log` endpoint reads from the right path; the generic `GET /api/build/log` is left for the train flow only.
+
+**Dismiss pattern for terminal states (train and verify).**
+A `POST /api/<op>/dismiss` endpoint resets the in-memory state to idle. Without it, a cancelled or failed card persists across page navigations because the state is in memory, not derived from the run store. The alternative (derive from the store on every render) would re-show cancelled runs every time the user navigates back, which is unexpected.
+
 ## Ambiguities and interpretations
 
 When the problem statement left something open, I chose the simplest interpretation that keeps the tool useful end-to-end.
@@ -227,7 +249,9 @@ Each alternative below was evaluated and discarded, with the reason.
 
 The MVP delivers the full local workflow; what follows was left out by choice.
 
-**Out of scope:** authentication, data versioning, rollback and A/B, monitoring and drift, GPU, distributed training, UI, CPU and memory limits, old run cleanup, and API route versioning.
+**Out of scope:** authentication, data versioning, rollback and A/B, monitoring and drift, GPU, distributed training, CPU and memory limits, old run cleanup, and API route versioning.
+
+**Delivered as v0.3.0 (was originally out of scope):** local Web UI (`mlt ui`, experimental) — read-only views (home, runs, diff) plus train, serve, and verify with live progress. The core/CLI contract was not changed; the UI calls the same `mlt.core` functions used by the CLI. No automated tests; manual verification only.
 
 **Evolution, in the order I would do it:**
 
@@ -241,7 +265,7 @@ The MVP delivers the full local workflow; what follows was left out by choice.
 
 **PySpark support:** a `SparkModel` with native `save` and `load`, `fit` with named-parameter injection, a cluster `Runner`, and a `DataSource` by URI.
 
-**Delivery priorities (7 days):** P0 is what cannot be missing: contract, training in Docker and venv, manifest and RunStore, `runs list/show`, `serve` in the foreground with `/predict`, tests, README, and documents. P1: `check`, `init` with `iris` template, `verify`, `diff`. P2, cut first if time runs short: `--snapshot-data`, `serve --detach`, `ps`, `stop`, `logs`, interrupted run reconciliation, `blank` template, `--json`, and `runs list --status`. `serve --detach` is P2 because, without `stop`, a background service would have no way to be stopped. The flows for all P2 items are closed in `design.md`, even if not implemented, and what is cut will be listed here.
+**Delivery priorities (7 days):** P0 is what cannot be missing: contract, training in Docker and venv, manifest and RunStore, `runs list/show`, `serve` in the foreground with `/predict`, tests, README, and documents. P1: `check`, `init` with `iris` template, `verify`, `diff`. P2, cut first if time runs short: `--snapshot-data`, `serve --detach`, `ps`, `stop`, `logs`, interrupted run reconciliation, `blank` template, `--json`, and `runs list --status` (CLI flag). `serve --detach` is P2 because, without `stop`, a background service would have no way to be stopped. The flows for all P2 items are closed in `design.md`. Of these, interrupted run reconciliation was implemented (`core/reconcile.py`, called by `mlt runs list`, `mlt runs show`, and `mlt ui` on startup); the rest remain unimplemented.
 
 ## Time spent and what I would do differently
 
@@ -259,8 +283,9 @@ Approximate time spent per step (generation + review + correction rounds):
 | 5 | FastAPI serving, mlt serve, 6 bug fixes | ~1 h |
 | 6 | Failure-mode tests, KeyboardInterrupt fix | ~15 min |
 | 7 | README, docs/architecture.md | ~30 min |
+| Web UI | FastAPI SPA: home, runs, train, serve, verify, diff, new project | ~6 h |
 
-**Total: approximately 4–5 hours of active work** (excluding test execution time for slow/docker suites).
+**Total: approximately 10–11 hours of active work** (excluding test execution time for slow/docker suites).
 
 **What I would do differently with more time:**
 
@@ -269,6 +294,10 @@ Approximate time spent per step (generation + review + correction rounds):
 - **Deliver the `blank` template.** It is P2 and small (~30 min). It completes the story for scientists not using scikit-learn and makes `MLModel` more tangible than just a base class described in the README.
 
 - **Add an end-to-end subprocess test for `mlt serve`.** The serving tests use `TestClient` (no subprocess). A test that actually spawns `uvicorn` via `serve_cmd` would give stronger confidence in the full `serve_cmd → subprocess → uvicorn → model.predict` path.
+
+- **Add UI tests.** The Web UI has no automated tests beyond the existing core/CLI suite. The main risk is frontend regressions (broken polling, stale state after navigation). A lightweight approach: a handful of `httpx` tests against `create_ui_app()` for the API endpoints, plus a few Playwright smoke tests for the most critical flows (start train, poll to done, navigate away).
+
+- **Support switching projects without restarting.** `create_ui_app(project_dir)` binds the server to a single project at startup; opening a different project requires restarting `mlt ui`. An "Open project" button was removed from the UI for this reason. The fix would make `project_dir` a session-level setting (stored in `.mlt/ui.state`) and add a project-picker endpoint, or run one server per project with a lightweight launcher that proxies between them.
 
 **On feature engineering and scope:**
 

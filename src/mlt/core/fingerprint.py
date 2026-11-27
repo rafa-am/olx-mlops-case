@@ -12,8 +12,11 @@ import json
 import subprocess
 from pathlib import Path
 
-# Directory names that are always excluded from the code hash.
-_CODE_EXCLUDE = {".mlt", ".git", "__pycache__", ".venv"}
+# Names always excluded from the code hash.
+# params.yaml and schema.yaml are excluded because they have dedicated hash
+# components in the fingerprint (hash_params, hash_schema_file); including
+# them in the code hash would cause a double-counted change in mlt diff.
+_CODE_EXCLUDE = {".mlt", ".git", "__pycache__", ".venv", "params.yaml", "schema.yaml"}
 
 
 # ---------------------------------------------------------------------------

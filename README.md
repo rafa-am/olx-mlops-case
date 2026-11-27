@@ -6,81 +6,13 @@ The scientist provides `model.py`, `requirements.txt`, and data. Everything else
 
 ---
 
-## Prerequisites
-
-| Requirement | Notes |
-|-------------|-------|
-| Python ≥ 3.10 | Host interpreter used to run `mlt` itself |
-| Docker (optional) | Primary isolation mode; without it, `mlt` falls back to venv automatically |
-| Network access on first build | Packages are downloaded once; subsequent runs use the cache |
-
----
-
-## Installation
-
-`mlt` manages isolated environments for your projects, so it should live in its own isolated environment on the host — not inside any project venv.
-
-**Recommended — via pipx (isolated, globally available):**
-
-```bash
-pipx install .
-```
-
-**Alternative — manual venv (pipx equivalent, without pipx):**
-
-```bash
-python3 -m venv ~/.local/share/mlt
-~/.local/share/mlt/bin/pip3 install .
-# add ~/.local/share/mlt/bin to your PATH (once, in ~/.bashrc or ~/.zshrc)
-export PATH="$HOME/.local/share/mlt/bin:$PATH"
-```
-
-**Development (editable, includes test deps):**
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip3 install -e ".[dev]"
-```
-
-Verify:
-
-```bash
-mlt --version
-# mlt 0.1.0
-# python 3.10.12
-# docker: available, daemon running        # docker group configured
-# docker: available, daemon not responding  # no permission / daemon down
-# docker: unavailable                       # docker not installed
-```
-
-```bash
-mlt --help
-# Usage: mlt [OPTIONS] [COMMAND] [ARGS]...
-#
-#   mlt: from reproducible training to a REST API, from Python alone.
-#
-# Options:
-#   --version  Show version, Python and Docker status, then exit.
-#   --help     Show this message and exit.
-#
-# Commands:
-#   check   Validate the project contract without training.
-#   diff    Compare two runs and show what changed.
-#   init    Create a new mlt project from a template.
-#   runs    List and inspect training runs.
-#   serve   Start the inference API for a run (foreground; Ctrl+C to stop).
-#   train   Train a model and record a run.
-#   verify  Re-train from a run's snapshot and verify reproducibility.
-```
-
----
-
 ## Quickstart — end to end in 6 steps
+
+> **Prerequisites and installation:** see [Prerequisites](#prerequisites) and [Installation](#installation) below.
 
 ### Step 1 — Create a project from the iris template
 
-Scaffolds a new project folder with a working Iris classifier — ready to check and train immediately.
+`mlt init` is the fastest way to start a new project: it scaffolds a folder that already follows the `mlt` contract (`model.py`, `requirements.txt`, and the optional config files), so you can check and train immediately without writing any boilerplate.
 
 ```bash
 mlt init ~/demo --template iris
@@ -136,7 +68,7 @@ Suggested steps:
 
 > On subsequent runs with the same inputs, `mlt train` returns immediately and prints the existing run ID — no redundant retraining.
 
-Add `--verbose` to print the full `train.log` at the end (pip output, `fit()` prints, etc.); without it, the log is saved to `.mlt/runs/<run_id>/train.log` but not shown.
+Add `--verbose` to stream build and training logs to the terminal in real time (pip output, `fit()` prints, etc.); without it, the logs are saved to the run directory but not shown. `mlt verify` also accepts `--verbose` with the same behaviour.
 
 The run is stored under `<project>/.mlt/runs/`. See [Directory layout](#directory-layout) for what it contains.
 
@@ -198,6 +130,76 @@ Swagger UI with an interactive editor is available at `http://127.0.0.1:8000/doc
 
 ---
 
+## Prerequisites
+
+| Requirement | Notes |
+|-------------|-------|
+| Python ≥ 3.10 | Host interpreter used to run `mlt` itself |
+| Docker (optional) | Primary isolation mode; without it, `mlt` falls back to venv automatically |
+| Network access on first build | Packages are downloaded once; subsequent runs use the cache |
+
+---
+
+## Installation
+
+`mlt` manages isolated environments for your projects, so it should live in its own isolated environment on the host — not inside any project venv.
+
+**Recommended — via pipx (isolated, globally available):**
+
+```bash
+pipx install .
+```
+
+**Alternative — manual venv (pipx equivalent, without pipx):**
+
+```bash
+python3 -m venv ~/.local/share/mlt
+~/.local/share/mlt/bin/pip3 install .
+# add ~/.local/share/mlt/bin to your PATH (once, in ~/.bashrc or ~/.zshrc)
+export PATH="$HOME/.local/share/mlt/bin:$PATH"
+```
+
+**Development (editable, includes test deps):**
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip3 install -e ".[dev]"
+```
+
+Verify:
+
+```bash
+mlt --version
+# mlt 0.3.0
+# python 3.10.12
+# docker: available, daemon running        # docker group configured
+# docker: available, daemon not responding  # no permission / daemon down
+# docker: unavailable                       # docker not installed
+```
+
+```bash
+mlt --help
+# Usage: mlt [OPTIONS] [COMMAND] [ARGS]...
+#
+#   mlt: from reproducible training to a REST API, from Python alone.
+#
+# Options:
+#   --version  Show version, Python and Docker status, then exit.
+#   --help     Show this message and exit.
+#
+# Commands:
+#   check   Validate the project contract without training.
+#   diff    Compare two runs and show what changed.
+#   init    Create a new mlt project from a template.
+#   runs    List and inspect training runs.
+#   serve   Start the inference API for a run (foreground; Ctrl+C to stop).
+#   train   Train a model and record a run.
+#   verify  Re-train from a run's snapshot and verify reproducibility.
+```
+
+---
+
 ## Scientist's guide
 
 ### What to provide
@@ -229,11 +231,15 @@ When using `MLModel` directly, you must also implement `save(self, path)` and `l
 ### Writing `model.py`
 
 ```python
+from __future__ import annotations
+
+from pathlib import Path
+
 from mlt.model.sklearn import SklearnModel   # or: from mlt.model.base import MLModel
 
 class Model(SklearnModel):
 
-    def fit(self, data_dir, params):
+    def fit(self, data_dir: Path, params: dict) -> dict[str, float]:
         """
         data_dir: pathlib.Path — read-only folder with your training data.
         params:   dict — contents of params.yaml (empty dict if absent).
@@ -257,7 +263,7 @@ class Model(SklearnModel):
         ).fit(X_tr, y_tr)
         return {"accuracy": float(self.model.score(X_te, y_te))}
 
-    def predict(self, inputs):
+    def predict(self, inputs: list[dict]) -> list:
         """Return one prediction per input record.
 
         inputs is a list of dicts with feature names as keys::
@@ -271,7 +277,7 @@ class Model(SklearnModel):
         """
         return super().predict(inputs)
 
-    def save(self, path):
+    def save(self, path: Path) -> None:
         """Persist the model to a directory.
 
         path is a pathlib.Path to a local directory created by mlt.
@@ -281,7 +287,7 @@ class Model(SklearnModel):
         super().save(path)
 
     @classmethod
-    def load(cls, path):
+    def load(cls, path: Path) -> "Model":
         """Restore the model from a directory.
 
         path is a pathlib.Path to the same directory passed to save().
@@ -333,8 +339,9 @@ Supported types: `int`, `float`, `str`. Optional constraints: `min`, `max`, `all
 | `mlt runs list` | Last 20 runs (run_id, status, duration, metrics, fingerprint); `--all` |
 | `mlt runs show <run_id>` | Full run detail; `latest` and unique prefix accepted |
 | `mlt diff <a> <b>` | What changed between two runs |
-| `mlt verify <run_id>` | Retrain from the run's own snapshot and compare metrics |
+| `mlt verify <run_id>` | Retrain from the run's own snapshot and compare metrics; `--runner`, `--verbose` |
 | `mlt serve <run_id>` | Start the inference API; `--port 8000`, `--host 127.0.0.1` |
+| `mlt ui [folder]` | Open the local Web UI for the project — **experimental** (see below) |
 
 **Run ID shortcuts:** every command that takes a `run_id` also accepts `latest` and any unique prefix (like `git`).
 
@@ -364,6 +371,39 @@ Error codes: 400 (malformed JSON), 413 (batch > 1000), 422 (schema violation wit
 
 ---
 
+## Web UI (experimental)
+
+> **Experimental.** The Web UI has no automated test coverage. It is a visual companion to the CLI — useful for exploration and demos, but not recommended as the primary interface for production workflows. Bugs are possible.
+
+`mlt ui` starts a local web server and opens a browser-based interface for the project. It covers the same operations as the CLI: browsing runs, training, serving, verifying reproducibility, comparing runs, and creating new projects.
+
+```bash
+mlt ui .          # open the UI for the current project
+mlt ui ~/demo     # open the UI for a specific project
+```
+
+The server starts on `http://127.0.0.1:8080` by default (`--port` to change). Press `Ctrl+C` to stop it.
+
+![mlt Web UI — Home](docs/webUI_screenshot_home.png)
+
+### What the UI covers
+
+| Feature | CLI equivalent |
+|---------|---------------|
+| Browse runs, run detail, compare | `mlt runs list/show`, `mlt diff` |
+| Start, cancel, and monitor training with step-by-step progress | `mlt train` |
+| Start and stop the inference service | `mlt serve` |
+| Verify reproducibility with live progress | `mlt verify` |
+| Create a new project from a template | `mlt init` |
+
+### Known limitations
+
+- **One project per server instance.** `mlt ui` binds to a single project directory at startup; opening a different project requires restarting.
+- **One operation at a time.** Only one training job and one verification can run simultaneously via the UI (same constraint as the CLI, enforced explicitly).
+- **No automated tests.** The UI is tested manually. Frontend regressions (broken polling, stale state after navigation) may occur.
+
+---
+
 ## Reproducibility and traceability
 
 Every run records a **fingerprint** — a hash of code, params, schema, deps, Python version, and seed. If you run `mlt train` with the same inputs, `mlt` returns the existing run instead of retraining.
@@ -374,6 +414,7 @@ Re-trains the model from scratch using exactly what the run stored — its own `
 
 ```bash
 mlt verify 20261125-143000-a1b2c3
+mlt verify 20261125-143000-a1b2c3 --verbose   # stream build and training logs in real time
 ```
 
 Exit 0 means reproduced; exit 4 means the metrics diverged beyond tolerance. The verification itself is recorded as a new run marked with `verification_of: <original_run_id>` — it appears in `mlt runs list` but is not a training run.
@@ -437,8 +478,7 @@ The following flows are designed but not yet implemented:
 - `serve --detach`, `mlt ps`, `mlt stop`, `mlt logs`: background serving with process management
 - `blank` template: `MLModel` skeleton for non-sklearn frameworks
 - `--json` output flag on all commands
-- `runs list --status` filter
-- `kill -9` reconciliation: a hard-killed training process leaves the run as `running`; a manual `mlt runs list` will not auto-recover it (Ctrl+C is handled correctly)
+- `runs list --status` filter (CLI flag; the Web UI already filters by status)
 
 ---
 

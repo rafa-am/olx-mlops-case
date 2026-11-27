@@ -216,6 +216,28 @@ In the implementation, verification is done with the critical flow tests and by 
 
 ---
 
+### Web UI — feat/web-ui (2026-11-27)
+
+**What the AI generated:** `src/mlt/ui/app.py` (FastAPI SPA, `_TrainState`, `_VerifyState`, `_ServeState`, all API endpoints), `src/mlt/ui/templates/index.html` (SPA: home, runs, run detail, train, serve, verify, diff, new project), `src/mlt/ui/cmd.py`, additions to `trainer.py` (`on_step`, `on_run_created`) and `verify.py` (`on_step`, `on_run_created`), `core/reconcile.py`, and `core/settings.py` additions.
+
+**Corrections made during implementation:**
+
+| What happened | Fix applied | Reason |
+|---|---|---|
+| Sidebar showed "New project" link | Removed | Not in the design snapshots; not part of the navigation contract |
+| Train settings card said "Read-only — set via .python-version, params.yaml or CLI flags" | Changed to "Set via .python-version and environment variables. Override runner below." | Runner is now selectable in the UI; "read-only" was inaccurate |
+| Verify page used `GET /api/build/log` during build phase | Added `GET /api/verify/log` reading from the snapshot's `.mlt/build.log` | `trainer.train()` writes build.log under `code_dir`, not the project root; the old endpoint showed stale log from the last interrupted train |
+| Verify poll called `buildVerifyView` unconditionally when done | Added check `location.hash.startsWith(...)` before re-rendering | Poll finishing in background replaced whichever page the user was on |
+| `POST /api/train` and `POST /api/verify/{run_id}` used plain `fetch` without checking `r.ok` | Added `r.ok` check and inline error message | 409 responses were silently swallowed; `alert()` only fired on network errors, never on the actual conflict |
+| Verify cancelled card persisted across navigation | Added `POST /api/verify/dismiss` and Dismiss button | Same root cause as the train cancelled card; in-memory state is not reset by navigation |
+| `_VerifyState` only set `new_run_id` after `verify_run()` returned | Added `on_run_created` callback to `trainer.train()` | UI was stuck on "Building environment…" for the entire verify; could not switch to train.log |
+
+**How the author verified:**
+- `pytest -m "not slow and not docker"`: 164/164 passed throughout all UI commits.
+- Manual end-to-end: `mlt ui .` with a trained iris project; exercised home, runs list, run detail, train (start, cancel, dismiss, force), serve (start, stop), verify (start, cancel, dismiss, reproduced, diverged), diff, new project.
+
+---
+
 ## Reflections
 
 *(Author's section — fill in before the presentation.)*

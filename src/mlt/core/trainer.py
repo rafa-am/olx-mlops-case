@@ -62,6 +62,9 @@ def train(
     force: bool = False,
     env: Mapping[str, str] | None = None,
     on_slow_build: "Callable[[], None] | None" = None,
+    on_runner_created: "Callable | None" = None,
+    on_step: "Callable[[str], None] | None" = None,
+    on_run_created: "Callable[[str], None] | None" = None,
     verification_of: str | None = None,
     _store_project_dir: Path | None = None,
 ) -> str:
@@ -77,7 +80,11 @@ def train(
     timeout:      Training timeout in seconds.
     force:        Re-train even if an identical run already exists.
     env:          Environment mapping for seed resolution (defaults to os.environ).
-    on_slow_build: Called when the environment build is known to be slow.
+    on_slow_build:  Called when the environment build is known to be slow.
+    on_step:        Called with a step name each time a new phase begins.
+    on_run_created: Called with the run_id immediately after the run record is
+                    created (before training starts). Useful for UIs that want
+                    to track the new run before training finishes.
     """
     import os
 
@@ -87,10 +94,17 @@ def train(
     project_dir = Path(project_dir).resolve()
     store_project_dir = Path(_store_project_dir).resolve() if _store_project_dir else project_dir
 
+    def _step(name: str) -> None:
+        # Step names must stay in sync with _TRAIN_STEPS in mlt/ui/app.py.
+        if on_step:
+            on_step(name)
+
     # 1. Static validation -------------------------------------------------
+    _step("validate_contract")
     validate_contract(project_dir)
 
     # 2. Resolve seed and Python -------------------------------------------
+    _step("resolve_environment")
     seed_val, seed_origin = resolve_seed(seed, env)
     python_minor, python_requested, python_source = resolve_python(project_dir, python)
 
@@ -98,12 +112,14 @@ def train(
     _check_python_compat(python_minor, python_requested, python_source, runner)
 
     # 3. Load params and check data ----------------------------------------
+    _step("check_data")
     params = _load_params(project_dir)
     effective_data_dir = data_dir if data_dir is not None else project_dir / "data"
     datasource = LocalDataSource(effective_data_dir)
     datasource.check()
 
     # 4. Calculate input hashes and fingerprint ----------------------------
+    _step("compute_fingerprint")
     data_name = Path(effective_data_dir).name
     # Exclude data dir name only if it is a direct child of project_dir.
     extra_exclude: set[str] = set()
@@ -128,13 +144,29 @@ def train(
             return existing.run_id
 
     # 6. Build environment -------------------------------------------------
+    # build.log captures pip/docker output during env build, before run_dir
+    # exists.  It is moved into run_dir after the run is created so it is
+    # archived alongside train.log.  It stays at .mlt/build.log on failure
+    # so the user can inspect it without digging into a run directory.
+    mlt_dir = project_dir / ".mlt"
+    mlt_dir.mkdir(exist_ok=True)
+    build_log_path = mlt_dir / "build.log"
+    build_log_path.unlink(missing_ok=True)  # fresh log for this attempt
+
+    _step("build_environment")
     req_txt = project_dir / "requirements.txt"
     runner_instance = _create_runner(runner, req_txt, python_minor)
-    lock_str = runner_instance.build_env(on_slow_build=on_slow_build)
+    if on_runner_created:
+        on_runner_created(runner_instance)
+    lock_str = runner_instance.build_env(
+        on_slow_build=on_slow_build,
+        log_path=build_log_path,
+    )
     deps_lock = [line for line in lock_str.splitlines() if line.strip()]
     eh = runner_instance.get_env_hash()
 
     # 7. Create run --------------------------------------------------------
+    _step("create_run")
     run_id = _new_run_id()
     partial = Manifest.new(
         run_id=run_id,
@@ -157,13 +189,28 @@ def train(
         verification_of=verification_of,
     )
     run_dir = store.create_run(partial)
+    if on_run_created:
+        on_run_created(run_id)
 
     # 8. Copy project snapshot and effective files -------------------------
     _copy_code(project_dir, run_dir / "code", exclude_names=extra_exclude | {".mlt"})
     _copy_if_exists(project_dir / "params.yaml", run_dir / "params.yaml")
     _copy_if_exists(project_dir / "schema.yaml", run_dir / "schema.yaml")
 
+    # Archive build.log in the run directory (empty / absent → cache hit, skip).
+    if build_log_path.exists() and build_log_path.stat().st_size > 0:
+        shutil.move(str(build_log_path), str(run_dir / "build.log"))
+
+    # Hold an exclusive flock on train.lock for the entire training duration.
+    # Any other process can detect an orphaned run by trying a non-blocking
+    # acquire: if it succeeds, this process died unexpectedly.
+    import fcntl as _fcntl
+    _lock_path = run_dir / "train.lock"
+    _lock_fd = _lock_path.open("w")
+    _fcntl.flock(_lock_fd.fileno(), _fcntl.LOCK_EX)
+
     # 9. Execute training --------------------------------------------------
+    _step("execute_training")
     try:
         exit_code = runner_instance.run_training(
             run_dir=run_dir,
@@ -175,6 +222,9 @@ def train(
     except KeyboardInterrupt:
         store.fail_run(run_id, "interrupted")
         raise
+    finally:
+        # Release lock — either normally or on any exception.
+        _lock_fd.close()
 
     # 10. Handle result ----------------------------------------------------
     if exit_code == 0:
