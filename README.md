@@ -8,6 +8,8 @@ The scientist provides `model.py`, `requirements.txt`, and data. Everything else
 
 ## Quickstart — end to end in 6 steps
 
+> **Prerequisites and installation:** see [Prerequisites](#prerequisites) and [Installation](#installation) below.
+
 ### Step 1 — Create a project from the iris template
 
 Scaffolds a new project folder with a working Iris classifier — ready to check and train immediately.
