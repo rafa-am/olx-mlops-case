@@ -64,6 +64,36 @@
     --neutral-fg:  #9ca3af;
   }
 }
+/* Explicit dark override (set via JS, wins over media query) */
+html.dark {
+  --bg:          #0e1210;
+  --bg-card:     #1a201e;
+  --bg-hover:    #202820;
+  --fg:          #e8f0ec;
+  --fg2:         #90a89a;
+  --fg3:         #607068;
+  --border:      #2a3830;
+  --success-bg:  #052e16;
+  --fail-bg:     #3b0a0a;
+  --warn-bg:     #2d1a00;
+  --neutral-bg:  #1f2937;
+  --neutral-fg:  #9ca3af;
+}
+/* Explicit light override */
+html.light {
+  --bg:          #f0f2f0;
+  --bg-card:     #ffffff;
+  --bg-hover:    #f5f7f5;
+  --fg:          #111111;
+  --fg2:         #555555;
+  --fg3:         #888888;
+  --border:      #e2e6e2;
+  --success-bg:  #dcfce7;
+  --fail-bg:     #fee2e2;
+  --warn-bg:     #fef3c7;
+  --neutral-bg:  #f3f4f6;
+  --neutral-fg:  #6b7280;
+}
 
 /* ================================================================
    Reset
@@ -353,7 +383,7 @@ input[type=checkbox] { width: 14px; height: 14px; cursor: pointer; accent-color:
     <span id="sb-pkg">mlt —</span>
   </div>
 
-  <button class="sb-dark-btn" id="dark-toggle">Dark mode: auto</button>
+  <button class="sb-dark-btn" id="dark-toggle" onclick="cycleDarkMode()">Dark mode: auto</button>
 </aside>
 
 <!-- ============================================================
@@ -364,6 +394,30 @@ input[type=checkbox] { width: 14px; height: 14px; cursor: pointer; accent-color:
 </main>
 
 <script>
+// ===================================================================
+// Dark mode: auto → dark → light → auto (persisted in localStorage)
+// ===================================================================
+const MODES = ['auto', 'dark', 'light'];
+
+function applyDarkMode(mode) {
+  document.documentElement.classList.remove('dark', 'light');
+  if (mode === 'dark' || mode === 'light') {
+    document.documentElement.classList.add(mode);
+  }
+  const btn = document.getElementById('dark-toggle');
+  if (btn) btn.textContent = `Dark mode: ${mode}`;
+}
+
+function cycleDarkMode() {
+  const current = localStorage.getItem('mlt-dark') || 'auto';
+  const next = MODES[(MODES.indexOf(current) + 1) % MODES.length];
+  localStorage.setItem('mlt-dark', next);
+  applyDarkMode(next);
+}
+
+// Apply immediately on script parse (before DOMContentLoaded) to avoid flash.
+applyDarkMode(localStorage.getItem('mlt-dark') || 'auto');
+
 // ===================================================================
 // State
 // ===================================================================
@@ -488,6 +542,9 @@ window.addEventListener('DOMContentLoaded', async () => {
       `<div style="padding:48px;color:var(--fail)">Could not reach mlt UI server: ${e.message}</div>`;
     return;
   }
+
+  // Sidebar: sync dark-mode button label
+  applyDarkMode(localStorage.getItem('mlt-dark') || 'auto');
 
   // Sidebar: package info
   document.title = `mlt ${S.meta.version}`;
