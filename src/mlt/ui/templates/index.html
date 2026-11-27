@@ -666,7 +666,7 @@ function buildTrainView(params, trainStatus) {
 
   $('#main').innerHTML = `
     <h1 class="page-title">Train</h1>
-    <p class="page-sub">Equivalent to <code>mlt train .</code></p>
+    <p class="page-sub">Train a model and record a run.</p>
 
     <div class="detail-grid" style="margin-bottom:16px">
       <div class="card" style="margin-bottom:0">
@@ -919,9 +919,7 @@ function buildRunsView() {
     <div class="runs-topbar">
       <div>
         <h1 class="page-title" style="margin-bottom:2px">Runs</h1>
-        <p class="page-sub" style="margin-bottom:0">
-          Equivalent to <code>mlt runs list</code>. Click a row to see its details (<code>mlt runs show</code>).
-        </p>
+        <p class="page-sub" style="margin-bottom:0">List and inspect training runs.</p>
       </div>
       <div class="runs-topbar-actions">
         <a href="${cmpEnabled ? cmpHref : '#'}" id="cmp-btn"
@@ -1260,9 +1258,7 @@ function renderCompareView(runs, selA, selB, diffData) {
 
   $('#main').innerHTML = `
     <h1 class="page-title">Compare runs</h1>
-    <p class="page-sub">
-      Equivalent to <code>mlt diff &lt;a&gt; &lt;b&gt;</code>: it does not train, it only reads the two manifests.
-    </p>
+    <p class="page-sub">Compare two runs and show what changed.</p>
 
     <div class="compare-pickers">
       <div class="card" style="margin-bottom:0">
