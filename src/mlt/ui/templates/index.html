@@ -1298,17 +1298,11 @@ async function renderHome() {
         </div>
       </div>
       <div class="card">
-        <div class="card-title">Open another folder</div>
-        <p style="font-size:12px;color:var(--fg3);margin-bottom:10px">
-          An mlt project folder (containing <code>model.py</code>). One project at a time.
+        <div class="card-title">New project</div>
+        <p style="font-size:12px;color:var(--fg3);margin-bottom:14px">
+          Create a new mlt project from a template. Files are copied to the folder you choose.
         </p>
-        <label style="font-size:12px;color:var(--fg3);display:block;margin-bottom:4px">Folder</label>
-        <input type="text" id="open-folder-input" value="${escHtml(S.project.dir)}"
-          style="margin-bottom:10px">
-        <a href="#/new" class="btn btn-secondary">New project</a>
-        <p style="font-size:11px;color:var(--fg3);margin-top:8px">
-          To open a different project, restart <code>mlt ui &lt;folder&gt;</code>.
-        </p>
+        <a href="#/new" class="btn btn-secondary">New project →</a>
       </div>
     </div>`;
 }
