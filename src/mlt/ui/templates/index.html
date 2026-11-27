@@ -383,7 +383,7 @@ input[type=checkbox] { width: 14px; height: 14px; cursor: pointer; accent-color:
     <span id="sb-pkg">mlt —</span>
   </div>
 
-  <button class="sb-dark-btn" id="dark-toggle" onclick="cycleDarkMode()">Dark mode: auto</button>
+  <button class="sb-dark-btn" id="dark-toggle" onclick="toggleDarkMode()">Dark mode: off</button>
 </aside>
 
 <!-- ============================================================
@@ -395,28 +395,23 @@ input[type=checkbox] { width: 14px; height: 14px; cursor: pointer; accent-color:
 
 <script>
 // ===================================================================
-// Dark mode: auto → dark → light → auto (persisted in localStorage)
+// Dark mode: simple on/off toggle (persisted in localStorage)
 // ===================================================================
-const MODES = ['auto', 'dark', 'light'];
-
-function applyDarkMode(mode) {
-  document.documentElement.classList.remove('dark', 'light');
-  if (mode === 'dark' || mode === 'light') {
-    document.documentElement.classList.add(mode);
-  }
+function applyDarkMode(on) {
+  document.documentElement.classList.toggle('dark', on);
+  document.documentElement.classList.toggle('light', !on);
   const btn = document.getElementById('dark-toggle');
-  if (btn) btn.textContent = `Dark mode: ${mode}`;
+  if (btn) btn.textContent = `Dark mode: ${on ? 'on' : 'off'}`;
 }
 
-function cycleDarkMode() {
-  const current = localStorage.getItem('mlt-dark') || 'auto';
-  const next = MODES[(MODES.indexOf(current) + 1) % MODES.length];
-  localStorage.setItem('mlt-dark', next);
-  applyDarkMode(next);
+function toggleDarkMode() {
+  const on = !document.documentElement.classList.contains('dark');
+  localStorage.setItem('mlt-dark', on ? '1' : '0');
+  applyDarkMode(on);
 }
 
-// Apply immediately on script parse (before DOMContentLoaded) to avoid flash.
-applyDarkMode(localStorage.getItem('mlt-dark') || 'auto');
+// Apply immediately on script parse to avoid flash.
+applyDarkMode(localStorage.getItem('mlt-dark') === '1');
 
 // ===================================================================
 // State
@@ -544,7 +539,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   }
 
   // Sidebar: sync dark-mode button label
-  applyDarkMode(localStorage.getItem('mlt-dark') || 'auto');
+  applyDarkMode(localStorage.getItem('mlt-dark') === '1');
 
   // Sidebar: package info
   document.title = `mlt ${S.meta.version}`;
