@@ -378,6 +378,8 @@ mlt ui ~/demo     # open the UI for a specific project
 
 The server starts on `http://127.0.0.1:8080` by default (`--port` to change). Press `Ctrl+C` to stop it.
 
+![mlt Web UI — Home](docs/webUI_screenshot_home.png)
+
 ### What the UI covers
 
 | Feature | CLI equivalent |
