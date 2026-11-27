@@ -538,6 +538,14 @@ def create_ui_app(project_dir: Path) -> FastAPI:
         ],
     }
 
+    @app.get("/api/templates")
+    def list_templates():
+        """Return available templates and their file lists."""
+        return {
+            name: [{"name": n, "description": d} for n, d in files]
+            for name, files in _TEMPLATE_FILES.items()
+        }
+
     @app.post("/api/init")
     async def init_project(request: Request):
         """Create a new project from a template (equivalent to mlt init)."""

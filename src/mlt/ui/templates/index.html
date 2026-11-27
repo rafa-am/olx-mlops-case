@@ -1609,35 +1609,30 @@ async function renderCompare(preA, preB) {
 // NEW PROJECT
 // ===================================================================
 
-// Static file list per template (mirrors _TEMPLATE_FILES in app.py).
-const _TEMPLATE_DEFS = {
-  iris: [
-    { name: 'model.py',          description: 'MLModel class (SklearnModel) ready for iris' },
-    { name: 'requirements.txt',  description: 'model dependencies' },
-    { name: 'params.yaml',       description: 'hyperparameters (optional)' },
-    { name: '.python-version',   description: 'pinned Python version' },
-    { name: '.gitignore',        description: 'excludes .mlt/, data/, .venv/' },
-    { name: 'data/iris.csv',     description: 'sample data' },
-  ],
-};
-
-function renderNewProject() {
-  _buildNewProjectView(null, null, null);
+async function renderNewProject() {
+  $('#main').innerHTML = '<div id="loading-state">Loading…</div>';
+  let templates = {};
+  try { templates = await api('/api/templates'); } catch (_) {}
+  _buildNewProjectView(null, null, null, templates);
 }
 
-function _buildNewProjectView(selectedTemplate, result, errorMsg) {
-  const tmpl = selectedTemplate || 'iris';
-  const files = _TEMPLATE_DEFS[tmpl] || [];
+function _buildNewProjectView(selectedTemplate, result, errorMsg, templates) {
+  // templates may be passed in or carried from window state.
+  if (templates) window._newProjTemplates = templates;
+  const tDefs = window._newProjTemplates || {};
+  const tmpl = selectedTemplate || Object.keys(tDefs)[0] || 'iris';
+  const files = tDefs[tmpl] || [];
   const fileRows = files.map(f =>
     `<tr><td style="font-family:var(--mono);font-size:12px">${escHtml(f.name)}</td>
          <td style="font-size:12px;color:var(--fg2)">${escHtml(f.description)}</td></tr>`
   ).join('');
 
-  const templatePills = Object.keys(_TEMPLATE_DEFS).map(t =>
+  const templatePills = Object.keys(tDefs).map(t =>
     `<span class="chip ${t === tmpl ? 'active' : ''}"
       style="cursor:pointer" onclick="_selectTemplate('${t}')">${escHtml(t)}</span>`
   ).join('') +
-  `<span class="chip" style="opacity:.45;cursor:not-allowed" title="P2 — not yet implemented">blank</span>`;
+  (tDefs['blank'] ? '' :
+    `<span class="chip" style="opacity:.45;cursor:not-allowed" title="P2 — not yet implemented">blank</span>`);
 
   let resultHtml = '';
   if (result) {
