@@ -946,6 +946,16 @@ async function dismissTrain() {
   buildTrainView(params, { status: 'idle' });
 }
 
+async function dismissVerify() {
+  try { await fetch('/api/verify/dismiss', { method: 'POST' }); } catch (_) {}
+  // Re-render as idle — orig is recovered from the URL hash (#/verify/<run_id>)
+  const runId = decodeURIComponent(location.hash.slice('#/verify/'.length));
+  try {
+    const orig = await api(`/api/runs/${encodeURIComponent(runId)}`);
+    buildVerifyView(orig, { status: 'idle' });
+  } catch (_) {}
+}
+
 function startTrainPoll() {
   _trainPollTimer = setInterval(async () => {
     try {
@@ -1819,8 +1829,12 @@ function buildVerifyView(orig, snap) {
   } else if (snap.status === 'failed') {
     statusCard = `
       <div class="card" style="border-color:var(--fail);margin-bottom:0">
-        <div class="card-title" style="color:var(--fail)">Verification failed</div>
-        <p style="font-size:13px;color:var(--fg2);margin-bottom:12px">${escHtml(snap.error || 'Unknown error')}</p>
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div class="card-title" style="color:var(--fail)">Verification failed</div>
+          <button class="btn btn-ghost" style="font-size:12px;padding:4px 10px"
+            onclick="dismissVerify()">Dismiss</button>
+        </div>
+        <p style="font-size:13px;color:var(--fg2);margin:4px 0 12px">${escHtml(snap.error || 'Unknown error')}</p>
         <button class="btn btn-secondary" onclick="_startVerify('${escHtml(orig.run_id)}')">Try again</button>
       </div>`;
   }

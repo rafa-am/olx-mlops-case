@@ -630,6 +630,20 @@ def create_ui_app(project_dir: Path) -> FastAPI:
         lines = log_path.read_text(encoding="utf-8", errors="replace").splitlines()
         return {"lines": lines[-tail:]}
 
+    @app.post("/api/verify/dismiss")
+    def dismiss_verify():
+        """Reset a terminal (done/failed) verification state back to idle."""
+        with _verify._lock:
+            if _verify.status == "running":
+                raise HTTPException(status_code=409, detail="Verification is still running.")
+            _verify.status   = "idle"
+            _verify.run_id   = None
+            _verify.new_run_id = None
+            _verify.error    = None
+            _verify.result   = None
+            _verify.steps    = []
+        return {"ok": True}
+
     @app.delete("/api/verify")
     def cancel_verify():
         """Request cancellation of the current verification job (best-effort)."""
