@@ -1,0 +1,1007 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>mlt</title>
+<style>
+/* ================================================================
+   CSS variables: light (default) + dark override
+   ================================================================ */
+:root {
+  /* Sidebar */
+  --sb-bg:        #1b2d2a;
+  --sb-bg2:       #162522;
+  --sb-active:    #1a6b5a;
+  --sb-text:      #c8d8d4;
+  --sb-text2:     #7ea89e;
+  --sb-border:    #2a3f3b;
+
+  /* Main content */
+  --bg:           #f0f2f0;
+  --bg-card:      #ffffff;
+  --bg-hover:     #f5f7f5;
+  --fg:           #111111;
+  --fg2:          #555555;
+  --fg3:          #888888;
+  --border:       #e2e6e2;
+
+  /* Accents */
+  --accent:       #1a7a6a;
+  --accent-h:     #15614f;
+  --accent-fg:    #ffffff;
+  --link:         #1a7a6a;
+
+  /* Status */
+  --success:      #16a34a;
+  --success-bg:   #dcfce7;
+  --fail:         #dc2626;
+  --fail-bg:      #fee2e2;
+  --warn:         #d97706;
+  --warn-bg:      #fef3c7;
+  --neutral-bg:   #f3f4f6;
+  --neutral-fg:   #6b7280;
+
+  /* Misc */
+  --mono:         "SF Mono", "Fira Code", "Consolas", monospace;
+  --r:            6px;
+  --r2:           10px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg:          #0e1210;
+    --bg-card:     #1a201e;
+    --bg-hover:    #202820;
+    --fg:          #e8f0ec;
+    --fg2:         #90a89a;
+    --fg3:         #607068;
+    --border:      #2a3830;
+    --success-bg:  #052e16;
+    --fail-bg:     #3b0a0a;
+    --warn-bg:     #2d1a00;
+    --neutral-bg:  #1f2937;
+    --neutral-fg:  #9ca3af;
+  }
+}
+
+/* ================================================================
+   Reset
+   ================================================================ */
+*,*::before,*::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: var(--bg); color: var(--fg); font-size: 14px; line-height: 1.6;
+  display: flex; min-height: 100vh; }
+a { color: var(--link); text-decoration: none; }
+a:hover { text-decoration: underline; }
+code, pre, .mono { font-family: var(--mono); }
+button { cursor: pointer; font-family: inherit; font-size: 13px; }
+
+/* ================================================================
+   Sidebar
+   ================================================================ */
+#sidebar {
+  width: 210px; min-width: 210px; background: var(--sb-bg);
+  display: flex; flex-direction: column; gap: 0;
+  position: sticky; top: 0; height: 100vh; overflow-y: auto;
+}
+
+.sb-logo {
+  padding: 18px 16px 10px;
+  display: flex; align-items: baseline; gap: 6px;
+}
+.sb-logo .brand {
+  font-size: 20px; font-weight: 800; color: #e0f0ec; letter-spacing: -1px;
+  font-family: var(--mono);
+}
+.sb-logo .sub {
+  font-size: 11px; color: var(--sb-text2);
+}
+
+.sb-project {
+  margin: 0 10px 8px;
+  background: var(--sb-bg2); border-radius: var(--r);
+  padding: 8px 10px;
+}
+.sb-project .label { font-size: 10px; color: var(--sb-text2); text-transform: uppercase; letter-spacing: .5px; }
+.sb-project .path  { font-size: 12px; color: var(--sb-text); font-family: var(--mono); word-break: break-all; }
+
+nav { padding: 4px 0; }
+nav a {
+  display: block; padding: 9px 16px;
+  font-size: 14px; color: var(--sb-text); border-radius: 0;
+  transition: background .12s;
+}
+nav a:hover { background: rgba(255,255,255,.07); text-decoration: none; }
+nav a.active { background: var(--sb-active); color: #fff; font-weight: 500; }
+
+.sb-sep { border: none; border-top: 1px solid var(--sb-border); margin: 8px 12px; }
+
+.sb-info { padding: 8px 16px; display: flex; flex-direction: column; gap: 3px; }
+.sb-info span { font-size: 11px; color: var(--sb-text2); }
+.sb-info span b { color: var(--sb-text); font-weight: 500; }
+.sb-info .ok   { color: #4ade80; }
+.sb-info .err  { color: #f87171; }
+
+.sb-dark-btn {
+  margin: 10px 10px 16px;
+  background: var(--sb-bg2); border: 1px solid var(--sb-border);
+  color: var(--sb-text); border-radius: var(--r); padding: 7px 12px;
+  font-size: 12px; text-align: left; width: calc(100% - 20px);
+}
+.sb-dark-btn:hover { background: rgba(255,255,255,.07); }
+
+/* ================================================================
+   Main content
+   ================================================================ */
+#main { flex: 1; min-width: 0; padding: 32px 36px; }
+
+.page-title { font-size: 26px; font-weight: 700; margin-bottom: 4px; }
+.page-sub   { font-size: 13px; color: var(--fg3); margin-bottom: 24px; }
+.page-sub code { font-size: 12px; }
+
+/* ================================================================
+   Cards
+   ================================================================ */
+.card {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--r2); padding: 20px; margin-bottom: 16px;
+}
+.card-title {
+  font-size: 15px; font-weight: 700; margin-bottom: 12px;
+}
+
+/* 3-col grid for home */
+.home-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+@media (max-width: 900px) { .home-grid { grid-template-columns: 1fr; } }
+
+/* ================================================================
+   KV table inside cards
+   ================================================================ */
+.kv { width: 100%; border-collapse: collapse; }
+.kv tr td { padding: 6px 0; border-bottom: 1px solid var(--border); vertical-align: top; }
+.kv tr:last-child td { border-bottom: none; }
+.kv .k { color: var(--fg3); font-size: 13px; padding-right: 16px; white-space: nowrap; width: 110px; }
+.kv .v { color: var(--fg); font-size: 13px; font-family: var(--mono); font-size: 12px; word-break: break-all; }
+
+/* ================================================================
+   Badges
+   ================================================================ */
+.badge {
+  display: inline-block; padding: 2px 9px; border-radius: 12px;
+  font-size: 11px; font-weight: 700; text-transform: lowercase; letter-spacing: .3px;
+}
+.badge-succeeded { background: var(--success-bg); color: var(--success); }
+.badge-failed    { background: var(--fail-bg);    color: var(--fail); }
+.badge-running   { background: var(--warn-bg);    color: var(--warn); }
+.badge-cancelled { background: var(--neutral-bg); color: var(--neutral-fg); }
+.badge-v {
+  display: inline-block; font-size: 10px; font-weight: 700; color: var(--accent);
+  margin-left: 4px;
+}
+
+/* ================================================================
+   Buttons
+   ================================================================ */
+.btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 7px 14px; border-radius: var(--r); font-weight: 500;
+  font-size: 13px; border: 1px solid transparent; transition: background .12s;
+  text-decoration: none;
+}
+.btn:hover { text-decoration: none; }
+.btn-primary   { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+.btn-primary:hover { background: var(--accent-h); border-color: var(--accent-h); }
+.btn-secondary { background: var(--bg-card); color: var(--fg); border-color: var(--border); }
+.btn-secondary:hover { background: var(--bg-hover); }
+.btn-ghost     { background: transparent; color: var(--fg2); border-color: var(--border); }
+.btn-ghost:hover { background: var(--bg-hover); color: var(--fg); }
+.btn:disabled, .btn[aria-disabled=true] {
+  opacity: .45; cursor: not-allowed; pointer-events: none;
+}
+
+/* ================================================================
+   Runs table
+   ================================================================ */
+.runs-topbar {
+  display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;
+}
+.runs-topbar-actions { display: flex; gap: 10px; }
+
+.filter-chips { display: flex; gap: 8px; margin-bottom: 16px; }
+.chip {
+  padding: 4px 14px; border-radius: 20px; font-size: 13px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--bg-card); color: var(--fg2);
+  transition: all .12s;
+}
+.chip:hover { border-color: var(--accent); color: var(--accent); }
+.chip.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th {
+  text-align: left; padding: 8px 12px;
+  color: var(--fg3); font-weight: 600; font-size: 11px;
+  text-transform: uppercase; letter-spacing: .5px;
+  border-bottom: 2px solid var(--border);
+}
+td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+tr:last-child td { border-bottom: none; }
+tr.clickable:hover td { background: var(--bg-hover); cursor: pointer; }
+
+.table-wrap { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--r2); overflow: hidden; }
+.table-footer { padding: 10px 16px; color: var(--fg3); font-size: 12px; border-top: 1px solid var(--border); }
+
+/* ================================================================
+   Detail page
+   ================================================================ */
+.detail-header {
+  display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 24px;
+}
+.detail-header-left h1 { font-size: 22px; font-weight: 700; margin-bottom: 6px; font-family: var(--mono); }
+.detail-header-left .meta { font-size: 13px; color: var(--fg3); display: flex; align-items: center; gap: 10px; }
+.detail-actions { display: flex; gap: 10px; }
+
+.detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+@media (max-width: 800px) { .detail-grid { grid-template-columns: 1fr; } }
+
+.error-box {
+  background: var(--fail-bg); border: 1px solid var(--fail);
+  border-radius: var(--r); padding: 16px; margin-bottom: 16px;
+}
+.error-box h3 { color: var(--fail); font-size: 14px; font-weight: 700; margin-bottom: 6px; }
+.error-box p  { color: var(--fail); font-size: 13px; }
+.error-box .hint { color: var(--fg3); font-size: 12px; margin-top: 6px; }
+
+.log-section { margin-bottom: 16px; }
+.log-section h4 { font-size: 12px; color: var(--fg3); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px; }
+.log-block {
+  background: #0d1210; color: #c8e0d8; border-radius: var(--r);
+  padding: 14px 16px; font-family: var(--mono); font-size: 12px;
+  line-height: 1.6; overflow-x: auto; white-space: pre;
+}
+
+.results-card { }
+.metric-name  { color: var(--fg3); font-size: 13px; }
+.metric-value { font-size: 16px; font-weight: 700; }
+.artifact-path { font-size: 11px; color: var(--fg3); font-family: var(--mono); margin-top: 10px; }
+
+.fingerprint-line { font-size: 12px; color: var(--fg3); margin-top: 12px; }
+
+/* ================================================================
+   Next step box (home)
+   ================================================================ */
+.next-step {
+  border-left: 4px solid var(--accent); padding: 14px 16px;
+  background: var(--bg-card); border-radius: 0 var(--r) var(--r) 0;
+  margin-bottom: 16px;
+}
+.next-step.failed { border-color: var(--fail); }
+.next-step.running { border-color: var(--warn); }
+.next-step h3 { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+.next-step p  { font-size: 13px; color: var(--fg2); margin-bottom: 10px; }
+
+/* ================================================================
+   Compare page
+   ================================================================ */
+.compare-pickers { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+.picker-label { font-size: 13px; font-weight: 700; margin-bottom: 8px; color: var(--fg2); }
+.picker-pills { display: flex; flex-wrap: wrap; gap: 8px; }
+.pill {
+  padding: 4px 12px; border-radius: 20px; font-size: 12px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--bg-card); color: var(--fg2);
+  font-family: var(--mono); transition: all .12s;
+}
+.pill:hover { border-color: var(--accent); color: var(--accent); }
+.pill.selected { border-color: var(--accent); color: var(--accent); font-weight: 700; }
+
+.fp-banner {
+  padding: 14px 18px; border-radius: var(--r); margin-bottom: 16px;
+  font-size: 14px;
+}
+.fp-banner.match  { background: var(--success-bg); color: var(--success); }
+.fp-banner.diff   { background: var(--warn-bg); }
+.fp-banner .fp-label { font-weight: 700; color: var(--warn); }
+.fp-banner .fp-hint  { color: var(--fg2); margin-left: 8px; }
+
+.cmp-table th { text-align: left; }
+.cmp-diff-val { color: #c05020; font-weight: 600; font-family: var(--mono); font-size: 12px; }
+
+/* ================================================================
+   Misc
+   ================================================================ */
+.empty { text-align: center; padding: 48px; color: var(--fg3); font-size: 14px; }
+.back-btn { display: inline-flex; align-items: center; gap: 5px; color: var(--fg3);
+  font-size: 13px; margin-bottom: 20px; border: 1px solid var(--border);
+  background: var(--bg-card); padding: 5px 12px; border-radius: var(--r); }
+.back-btn:hover { color: var(--fg); background: var(--bg-hover); text-decoration: none; }
+input[type=text], input[type=number] {
+  border: 1px solid var(--border); border-radius: var(--r); padding: 7px 10px;
+  font-size: 13px; width: 100%; background: var(--bg); color: var(--fg);
+}
+input[type=text]:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+input[type=checkbox] { width: 14px; height: 14px; cursor: pointer; accent-color: var(--accent); }
+#loading-state { text-align: center; padding: 64px; color: var(--fg3); }
+</style>
+</head>
+<body>
+
+<!-- ============================================================
+     SIDEBAR
+     ============================================================ -->
+<aside id="sidebar">
+  <div class="sb-logo">
+    <span class="brand">mlt</span>
+    <span class="sub">Web UI</span>
+  </div>
+
+  <div class="sb-project">
+    <div class="label">open project</div>
+    <div class="path" id="sb-path">—</div>
+  </div>
+
+  <nav id="sidebar-nav">
+    <a href="#/" data-page="home">Home</a>
+    <a href="#/runs" data-page="runs">Runs</a>
+    <a href="#/compare" data-page="compare">Compare</a>
+  </nav>
+
+  <hr class="sb-sep">
+
+  <div class="sb-info" id="sb-info">
+    <span>docker: <b>—</b></span>
+    <span id="sb-pkg">mlt —</span>
+  </div>
+
+  <button class="sb-dark-btn" id="dark-toggle">Dark mode: auto</button>
+</aside>
+
+<!-- ============================================================
+     MAIN
+     ============================================================ -->
+<main id="main">
+  <div id="loading-state">Loading…</div>
+</main>
+
+<script>
+// ===================================================================
+// State
+// ===================================================================
+const S = {
+  meta:    null,
+  project: null,
+  runs:    null,          // cached list (all)
+  selected: [],           // run_ids chosen for compare
+  statusFilter: 'all',
+};
+
+// ===================================================================
+// API
+// ===================================================================
+async function api(path) {
+  const r = await fetch(path);
+  if (!r.ok) {
+    let detail = r.statusText;
+    try { detail = (await r.json()).detail || detail; } catch(_) {}
+    throw new Error(detail);
+  }
+  return r.json();
+}
+
+// ===================================================================
+// Helpers
+// ===================================================================
+function el(tag, cls, html) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (html !== undefined) e.innerHTML = html;
+  return e;
+}
+function $(sel) { return document.querySelector(sel); }
+function $$(sel) { return [...document.querySelectorAll(sel)]; }
+
+function age(iso) {
+  if (!iso) return '—';
+  const s = (Date.now() - new Date(iso)) / 1000;
+  if (s < 60)    return `${Math.round(s)}s ago`;
+  if (s < 3600)  return `${Math.round(s / 60)}m ago`;
+  if (s < 86400) return `${Math.round(s / 3600)}h ago`;
+  return `${Math.round(s / 86400)}d ago`;
+}
+
+function dur(s) {
+  if (s == null) return '—';
+  if (s < 60) return `${s.toFixed(1)}s`;
+  return `${Math.floor(s / 60)}m ${Math.round(s % 60)}s`;
+}
+
+function shortId(id) {
+  if (!id) return '—';
+  // "20261126-090210-b7e4d1" → "…b7e4d1"  (last 6 chars after last dash)
+  const parts = id.split('-');
+  return `…${parts[parts.length - 1]}`;
+}
+
+function shortHash(h) { return h ? h.slice(0, 8) : '—'; }
+
+function badge(status) {
+  return `<span class="badge badge-${status}">${status}</span>`;
+}
+
+function metricsCell(metrics) {
+  if (!metrics || !Object.keys(metrics).length) return '—';
+  return Object.entries(metrics).slice(0, 3)
+    .map(([k, v]) => `${k}=${typeof v === 'number' ? v.toFixed(4) : v}`)
+    .join('<br>');
+}
+
+function kvRows(pairs) {
+  return pairs.map(([k, v]) =>
+    `<tr><td class="k">${k}</td><td class="v">${v ?? '—'}</td></tr>`
+  ).join('');
+}
+
+// ===================================================================
+// Routing
+// ===================================================================
+function setActivePage(page) {
+  $$('#sidebar-nav a').forEach(a => {
+    a.classList.toggle('active', a.dataset.page === page);
+  });
+}
+
+async function route() {
+  const hash = location.hash || '#/';
+  const path = hash.slice(1);  // strip '#'
+
+  if (path === '/' || path === '') {
+    setActivePage('home');
+    renderHome();
+  } else if (path === '/runs') {
+    setActivePage('runs');
+    renderRuns();
+  } else if (path.startsWith('/run/')) {
+    setActivePage('runs');
+    renderRunDetail(decodeURIComponent(path.slice(5)));
+  } else if (path.startsWith('/compare')) {
+    setActivePage('compare');
+    const parts = path.slice(9).split('/').filter(Boolean);
+    renderCompare(parts[0] || null, parts[1] || null);
+  } else {
+    setActivePage('home');
+    renderHome();
+  }
+}
+
+window.addEventListener('hashchange', route);
+
+// ===================================================================
+// Bootstrap
+// ===================================================================
+window.addEventListener('DOMContentLoaded', async () => {
+  try {
+    [S.meta, S.project] = await Promise.all([api('/api/meta'), api('/api/project')]);
+  } catch (e) {
+    $('#main').innerHTML =
+      `<div style="padding:48px;color:var(--fail)">Could not reach mlt UI server: ${e.message}</div>`;
+    return;
+  }
+
+  // Sidebar
+  document.title = `mlt ${S.meta.version}`;
+  $('#sb-path').textContent = S.project.dir;
+  $('#sb-pkg').innerHTML =
+    `<b>mlt · Model Lifecycle Toolkit</b><br>version ${S.meta.version}`;
+
+  route();
+});
+
+// ===================================================================
+// HOME
+// ===================================================================
+async function renderHome() {
+  $('#main').innerHTML = '<div id="loading-state">Loading…</div>';
+
+  let runs = [];
+  try { runs = await api('/api/runs?limit=20'); } catch(_) {}
+  const last = runs[0];
+
+  let nextHtml = '';
+  if (!last) {
+    nextHtml = `<div class="next-step">
+      <h3>Next step</h3>
+      <p>No runs yet. Run <code>mlt train .</code> to train your first model.</p>
+    </div>`;
+  } else if (last.status === 'running') {
+    nextHtml = `<div class="next-step running">
+      <h3>Next step</h3>
+      <p>Training is in progress: <a href="#/run/${last.run_id}">${last.run_id}</a></p>
+    </div>`;
+  } else if (last.status === 'failed') {
+    const errSnippet = last.error
+      ? last.error.split('\n').slice(-2).join(' · ').slice(0, 120)
+      : 'unknown error';
+    nextHtml = `<div class="next-step failed">
+      <h3>Next step</h3>
+      <p>The last training failed: ${escHtml(errSnippet)}</p>
+      <a href="#/run/${last.run_id}" class="btn btn-secondary" style="margin-top:8px">View the log</a>
+    </div>`;
+  } else if (last.status === 'succeeded') {
+    nextHtml = `<div class="next-step">
+      <h3>Next step</h3>
+      <p>Last run succeeded. Run <code>mlt serve latest</code> to start the inference API.</p>
+      <a href="#/run/${last.run_id}" class="btn btn-secondary" style="margin-top:8px">View run details</a>
+    </div>`;
+  }
+
+  // About card (closeable)
+  const aboutCard = `<div class="card" id="about-card">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start">
+      <div>
+        <div style="font-size:15px;margin-bottom:6px">
+          <b style="font-family:var(--mono)">mlt</b> · <b>Model Lifecycle Toolkit</b>
+          <span style="color:var(--fg3);font-weight:400"> version ${S.meta.version}</span>
+        </div>
+        <p style="font-size:13px;color:var(--fg2);max-width:720px">${S.meta.description}</p>
+      </div>
+      <button class="btn btn-ghost" style="flex-shrink:0;margin-left:16px"
+        onclick="document.getElementById('about-card').remove()">Close</button>
+    </div>
+  </div>`;
+
+  // Counts
+  const totalRuns = runs.length;
+  const lastRunLine = last
+    ? `<a href="#/run/${last.run_id}" style="font-family:var(--mono);font-size:12px">${last.run_id}</a>
+       <br>${badge(last.status)} (${age(last.created_at)})`
+    : '—';
+
+  $('#main').innerHTML = `
+    <h1 class="page-title">Home</h1>
+    <p class="page-sub">Where you left off in the open project.</p>
+
+    ${aboutCard}
+    ${nextHtml}
+
+    <div class="home-grid">
+      <div class="card">
+        <div class="card-title">Project</div>
+        <table class="kv">
+          ${kvRows([
+            ['folder',  `<span style="font-size:12px">${escHtml(S.project.dir)}</span>`],
+            ['python',  '—'],
+            ['runner',  '—'],
+            ['runs',    totalRuns],
+          ])}
+        </table>
+      </div>
+      <div class="card">
+        <div class="card-title">Now</div>
+        <table class="kv">
+          ${kvRows([
+            ['last run',  lastRunLine],
+            ['training',  'none in progress'],
+            ['service',   'none in progress'],
+          ])}
+        </table>
+        <div style="margin-top:12px">
+          <a href="#/runs" class="btn btn-secondary">View all runs</a>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Open another folder</div>
+        <p style="font-size:12px;color:var(--fg3);margin-bottom:10px">
+          An mlt project folder (containing <code>model.py</code>). One project at a time.
+        </p>
+        <label style="font-size:12px;color:var(--fg3);display:block;margin-bottom:4px">Folder</label>
+        <input type="text" id="open-folder-input" value="${escHtml(S.project.dir)}"
+          style="margin-bottom:10px">
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-secondary" disabled aria-disabled="true">Open</button>
+          <button class="btn btn-secondary" disabled aria-disabled="true">New project</button>
+        </div>
+        <p style="font-size:11px;color:var(--fg3);margin-top:8px">
+          Switching projects via the UI is not yet supported — restart <code>mlt ui</code> with the new folder.
+        </p>
+      </div>
+    </div>`;
+}
+
+function escHtml(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ===================================================================
+// RUNS LIST
+// ===================================================================
+async function renderRuns() {
+  $('#main').innerHTML = '<div id="loading-state">Loading runs…</div>';
+
+  try { S.runs = await api('/api/runs?limit=50'); }
+  catch (e) {
+    $('#main').innerHTML = `<div style="padding:24px;color:var(--fail)">${e.message}</div>`;
+    return;
+  }
+
+  buildRunsView();
+}
+
+function filteredRuns() {
+  if (!S.runs) return [];
+  if (S.statusFilter === 'all') return S.runs;
+  return S.runs.filter(r => r.status === S.statusFilter);
+}
+
+function buildRunsView() {
+  const rows = filteredRuns();
+  const cmpEnabled = S.selected.length === 2;
+  const cmpHref = cmpEnabled
+    ? `#/compare/${S.selected[0]}/${S.selected[1]}`
+    : '#/compare';
+
+  $('#main').innerHTML = `
+    <div class="runs-topbar">
+      <div>
+        <h1 class="page-title" style="margin-bottom:2px">Runs</h1>
+        <p class="page-sub" style="margin-bottom:0">
+          Equivalent to <code>mlt runs list</code>. Click a row to see its details (<code>mlt runs show</code>).
+        </p>
+      </div>
+      <div class="runs-topbar-actions">
+        <a href="${cmpEnabled ? cmpHref : '#'}" id="cmp-btn"
+          class="btn btn-secondary ${cmpEnabled ? '' : ''}"
+          ${cmpEnabled ? '' : 'aria-disabled="true"'}
+          style="${cmpEnabled ? '' : 'opacity:.45;cursor:not-allowed;pointer-events:none'}">
+          ${cmpEnabled ? 'Compare the 2 selected' : 'Compare (select 2)'}
+        </a>
+        <button class="btn btn-primary" disabled aria-disabled="true">New training run</button>
+      </div>
+    </div>
+
+    <div class="filter-chips">
+      <span class="chip ${S.statusFilter==='all'?'active':''}" data-filter="all">All</span>
+      <span class="chip ${S.statusFilter==='succeeded'?'active':''}" data-filter="succeeded">succeeded</span>
+      <span class="chip ${S.statusFilter==='failed'?'active':''}" data-filter="failed">failed</span>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th style="width:40px">Compare</th>
+          <th>run_id</th>
+          <th>Status</th>
+          <th>When</th>
+          <th>Duration</th>
+          <th>Metrics</th>
+          <th>Fingerprint</th>
+          <th></th>
+        </tr></thead>
+        <tbody>
+          ${rows.length ? rows.map(r => `
+            <tr class="clickable" data-id="${r.run_id}">
+              <td onclick="event.stopPropagation()">
+                <input type="checkbox" class="run-check" data-id="${r.run_id}"
+                  ${S.selected.includes(r.run_id) ? 'checked' : ''}
+                  onchange="toggleSelect('${r.run_id}', this.checked)">
+              </td>
+              <td style="font-family:var(--mono);font-size:12px">${escHtml(r.run_id)}</td>
+              <td>
+                ${badge(r.status)}
+                ${r.verification_of ? '<span class="badge-v">[V]</span>' : ''}
+              </td>
+              <td style="color:var(--fg3)">${age(r.created_at)}</td>
+              <td style="color:var(--fg3)">${dur(r.duration_s)}</td>
+              <td style="font-size:12px;line-height:1.5">${metricsCell(r.outputs?.metrics)}</td>
+              <td style="font-family:var(--mono);font-size:12px;color:var(--fg3)">${shortHash(r.fingerprint)}</td>
+              <td><a href="#/run/${r.run_id}" class="btn btn-ghost" style="padding:4px 10px;font-size:12px"
+                  onclick="event.stopPropagation()">Details</a></td>
+            </tr>`).join('') :
+            `<tr><td colspan="8"><div class="empty">No runs found.</div></td></tr>`
+          }
+        </tbody>
+      </table>
+      <div class="table-footer">
+        [V] marks a run created by <code>mlt verify</code>. An identical fingerprint between the original
+        and the verification shows the inputs are the same.
+      </div>
+    </div>`;
+
+  // Filter chips
+  $$('.chip[data-filter]').forEach(c => {
+    c.addEventListener('click', () => {
+      S.statusFilter = c.dataset.filter;
+      buildRunsView();
+    });
+  });
+
+  // Row click → detail
+  $$('tr.clickable[data-id]').forEach(tr => {
+    tr.addEventListener('click', e => {
+      if (e.target.type === 'checkbox') return;
+      location.hash = `#/run/${tr.dataset.id}`;
+    });
+  });
+}
+
+function toggleSelect(id, checked) {
+  if (checked) {
+    if (!S.selected.includes(id)) {
+      S.selected.push(id);
+      if (S.selected.length > 2) S.selected.shift();
+    }
+  } else {
+    S.selected = S.selected.filter(x => x !== id);
+  }
+  buildRunsView();
+}
+
+// ===================================================================
+// RUN DETAIL
+// ===================================================================
+async function renderRunDetail(runId) {
+  $('#main').innerHTML = '<div id="loading-state">Loading…</div>';
+
+  let m, logLines = [];
+  try {
+    m = await api(`/api/runs/${encodeURIComponent(runId)}`);
+    try {
+      const logResp = await api(`/api/runs/${encodeURIComponent(m.run_id)}/log`);
+      logLines = logResp.lines || [];
+    } catch(_) {}
+  } catch(e) {
+    $('#main').innerHTML = `<div style="padding:24px;color:var(--fail)">${e.message}</div>`;
+    return;
+  }
+
+  const inp = m.inputs || {};
+  const env = m.environment || {};
+  const out = m.outputs || {};
+  const params = inp.params?.values || {};
+  const paramsStr = Object.entries(params).map(([k,v])=>`${k}=${v}`).join(' ') || '—';
+  const dataFiles = inp.data?.files ? Object.keys(inp.data.files).length : null;
+  const depsCount = inp.deps?.lock ? inp.deps.lock.length : null;
+
+  // Error section (failed runs)
+  const errorHtml = m.error ? `
+    <div class="error-box">
+      <h3>Execution error (exit 4)</h3>
+      <p>${escHtml(m.error.split('\n').filter(Boolean).pop() || m.error)}</p>
+      <p class="hint">The run was recorded as failed, with its log preserved. Fix <code>model.py</code> or the data and train again.</p>
+    </div>
+    ${logLines.length ? `
+    <div class="log-section">
+      <h4>train.log (last lines)</h4>
+      <div class="log-block">${escHtml(logLines.join('\n'))}</div>
+    </div>` : ''}` : '';
+
+  // Actions (P2 — shown but disabled)
+  const actionsHtml = `
+    <div class="detail-actions">
+      <button class="btn btn-secondary" disabled aria-disabled="true">Verify reproducibility</button>
+      <button class="btn btn-primary" disabled aria-disabled="true">Serve this run</button>
+    </div>`;
+
+  // Inputs card
+  const inputsCard = `
+    <div class="card">
+      <div class="card-title">Inputs</div>
+      <table class="kv">
+        ${kvRows([
+          ['seed',   inp.seed != null ? `${inp.seed}${inp.seed_source ? ` (${inp.seed_source})` : ''}` : '—'],
+          ['python', inp.python?.requested ? `${inp.python.requested}${inp.python?.source ? ` (${inp.python.source})` : ''}` : '—'],
+          ['code',   inp.code?.hash ? `${shortHash(inp.code.hash)}${inp.code.git_commit ? ` commit ${inp.code.git_commit.slice(0,8)}` : ''}` : '—'],
+          ['params', paramsStr],
+          ['data',   dataFiles != null ? `${dataFiles} file${dataFiles!==1?'s':''} hash ${shortHash(inp.data?.hash)}` : '—'],
+          ['deps',   depsCount != null ? `${depsCount} packages (lock in manifest)` : '—'],
+        ])}
+      </table>
+    </div>`;
+
+  // Environment card
+  const envCard = `
+    <div class="card">
+      <div class="card-title">Environment</div>
+      <table class="kv">
+        ${kvRows([
+          ['runner',    env.runner ?? '—'],
+          ['isolation', env.isolation ?? '—'],
+          ['python',    env.python ?? '—'],
+          ['image',     env.env_hash ? `sha256:${env.env_hash.slice(0,8)}…` : '—'],
+        ])}
+      </table>
+      ${out.metrics || (m.status === 'failed') ? `
+      <div class="card-title" style="margin-top:16px">Results</div>
+      ${out.metrics && Object.keys(out.metrics).length
+        ? Object.entries(out.metrics).map(([k,v]) =>
+            `<div><span class="metric-name">${k}</span><br>
+             <span class="metric-value">${typeof v === 'number' ? v.toFixed(4) : v}</span></div>`
+          ).join('<hr style="border:none;border-top:1px solid var(--border);margin:8px 0">')
+        : '<p style="font-size:13px;color:var(--fg3)">No metrics: the training failed before finishing.</p>'
+      }
+      ${out.artifacts ? `<div class="artifact-path">${Object.values(out.artifacts).join('<br>')}</div>` : ''}
+      ` : ''}
+    </div>`;
+
+  $('#main').innerHTML = `
+    <a href="#/runs" class="back-btn">← Runs</a>
+
+    <div class="detail-header">
+      <div class="detail-header-left">
+        <h1>${escHtml(m.run_id)}</h1>
+        <div class="meta">
+          ${badge(m.status)}
+          <span>${age(m.created_at)} · ${dur(m.duration_s)}</span>
+          ${m.verification_of ? `<span class="badge-v" style="font-size:12px">[V] verifies <a href="#/run/${m.verification_of}" style="font-size:12px">${shortId(m.verification_of)}</a></span>` : ''}
+        </div>
+      </div>
+      ${actionsHtml}
+    </div>
+
+    ${errorHtml}
+
+    <div class="detail-grid">
+      ${inputsCard}
+      ${envCard}
+    </div>
+
+    ${m.fingerprint ? `<p class="fingerprint-line">Full fingerprint: <code>${m.fingerprint}</code></p>` : ''}`;
+}
+
+// ===================================================================
+// COMPARE
+// ===================================================================
+async function renderCompare(preA, preB) {
+  $('#main').innerHTML = '<div id="loading-state">Loading…</div>';
+
+  let runs = S.runs;
+  if (!runs) {
+    try { runs = S.runs = await api('/api/runs?limit=50'); }
+    catch (e) {
+      $('#main').innerHTML = `<div style="padding:24px;color:var(--fail)">${e.message}</div>`;
+      return;
+    }
+  }
+
+  // Resolve preselected run_ids (may be short ids from S.selected)
+  const findRun = (candidate) => {
+    if (!candidate) return null;
+    return runs.find(r => r.run_id === candidate || r.run_id.endsWith(candidate));
+  };
+
+  let selA = findRun(preA || S.selected[0]) || null;
+  let selB = findRun(preB || S.selected[1]) || null;
+
+  async function loadAndRender() {
+    let diffData = null;
+    if (selA && selB && selA.run_id !== selB.run_id) {
+      try {
+        diffData = await api(`/api/diff/${encodeURIComponent(selA.run_id)}/${encodeURIComponent(selB.run_id)}`);
+      } catch (e) {
+        diffData = { error: e.message };
+      }
+    }
+    renderCompareView(runs, selA, selB, diffData);
+  }
+
+  window._compareSelectA = async (id) => {
+    selA = runs.find(r => r.run_id === id) || null;
+    await loadAndRender();
+  };
+  window._compareSelectB = async (id) => {
+    selB = runs.find(r => r.run_id === id) || null;
+    await loadAndRender();
+  };
+
+  await loadAndRender();
+}
+
+function renderCompareView(runs, selA, selB, diffData) {
+  const pillsA = runs.slice(0, 6).map(r => `
+    <span class="pill ${selA && selA.run_id === r.run_id ? 'selected' : ''}"
+      onclick="window._compareSelectA('${r.run_id}')">${shortId(r.run_id)}</span>`).join('');
+  const pillsB = runs.slice(0, 6).map(r => `
+    <span class="pill ${selB && selB.run_id === r.run_id ? 'selected' : ''}"
+      onclick="window._compareSelectB('${r.run_id}')">${shortId(r.run_id)}</span>`).join('');
+
+  let diffHtml = '';
+  if (!selA || !selB) {
+    diffHtml = '<div class="card"><p style="color:var(--fg3);padding:8px">Select Run A and Run B above to compare.</p></div>';
+  } else if (selA.run_id === selB.run_id) {
+    diffHtml = '<div class="card"><p style="color:var(--fg3);padding:8px">Select two different runs.</p></div>';
+  } else if (diffData?.error) {
+    diffHtml = `<div class="card"><p style="color:var(--fail)">${diffData.error}</p></div>`;
+  } else if (diffData) {
+    const fpBannerHtml = diffData.fingerprint_match
+      ? `<div class="fp-banner match">
+          <span style="font-weight:700;color:var(--success)">✓ fingerprint: identical</span>
+          <span style="color:var(--fg2);margin-left:8px">The inputs that determine training are the same.</span>
+         </div>`
+      : `<div class="fp-banner diff">
+          <span class="fp-label">fingerprint: different (${(diffData.fingerprint_components||[]).join(', ')})</span>
+          <span class="fp-hint">This is what changed in the inputs.</span>
+         </div>`;
+
+    // Build flat rows: [section, field, valA, valB, diffStr]
+    const tableRows = [];
+
+    (diffData.param_diffs || []).forEach(([k, a, b]) => {
+      tableRows.push(['params', k, a, b, `${a} → ${b}`]);
+    });
+    if (diffData.code_hash_diff) {
+      tableRows.push(['code', 'hash', shortHash(diffData.code_hash_diff[0]), shortHash(diffData.code_hash_diff[1]), null]);
+    }
+    if (diffData.code_commit_diff) {
+      tableRows.push(['code', 'commit', diffData.code_commit_diff[0]?.slice(0,8), diffData.code_commit_diff[1]?.slice(0,8), null]);
+    }
+    if (diffData.data_hash_diff) {
+      tableRows.push(['data', 'hash', shortHash(diffData.data_hash_diff[0]), shortHash(diffData.data_hash_diff[1]), null]);
+    }
+    if (diffData.seed_diff) {
+      tableRows.push(['seed', 'seed', diffData.seed_diff[0], diffData.seed_diff[1], `${diffData.seed_diff[0]} → ${diffData.seed_diff[1]}`]);
+    }
+    if (diffData.python_diff) {
+      tableRows.push(['python', 'requested', diffData.python_diff[0], diffData.python_diff[1], null]);
+    }
+    if (diffData.deps_hash_diff) {
+      tableRows.push(['deps', 'hash', shortHash(diffData.deps_hash_diff[0]), shortHash(diffData.deps_hash_diff[1]), null]);
+    }
+    (diffData.env_diffs || []).forEach(([k, a, b]) => {
+      tableRows.push(['environment', k, a, b, null]);
+    });
+    (diffData.metric_diffs || []).forEach(([k, a, b]) => {
+      let delta = '';
+      if (typeof a === 'number' && typeof b === 'number') {
+        const d = b - a;
+        delta = `Δ ${d >= 0 ? '+' : ''}${d.toFixed(4)}`;
+      }
+      tableRows.push(['metrics', k, a != null ? a.toFixed(4) : '—', b != null ? b.toFixed(4) : '—', delta]);
+    });
+
+    const tableHtml = tableRows.length ? `
+      <div class="table-wrap">
+        <table class="cmp-table">
+          <thead><tr>
+            <th>Section</th><th>Field</th>
+            <th>Run A — ${shortId(selA.run_id)}</th>
+            <th>Run B — ${shortId(selB.run_id)}</th>
+            <th>Difference</th>
+          </tr></thead>
+          <tbody>
+            ${tableRows.map(([sec, field, va, vb, diff]) => `
+              <tr>
+                <td style="font-weight:700;color:var(--fg2)">${sec}</td>
+                <td style="font-family:var(--mono);font-size:12px">${field}</td>
+                <td style="font-family:var(--mono);font-size:12px">${va ?? '—'}</td>
+                <td style="font-family:var(--mono);font-size:12px">${vb ?? '—'}</td>
+                <td class="cmp-diff-val">${diff || ''}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>` : `<div class="card"><p style="color:var(--fg3);padding:8px">No differences found across inputs, environment and metrics.</p></div>`;
+
+    diffHtml = fpBannerHtml + tableHtml;
+  }
+
+  $('#main').innerHTML = `
+    <h1 class="page-title">Compare runs</h1>
+    <p class="page-sub">
+      Equivalent to <code>mlt diff &lt;a&gt; &lt;b&gt;</code>: it does not train, it only reads the two manifests.
+    </p>
+
+    <div class="compare-pickers">
+      <div class="card" style="margin-bottom:0">
+        <div class="picker-label">Run A</div>
+        <div class="picker-pills">${pillsA}</div>
+      </div>
+      <div class="card" style="margin-bottom:0">
+        <div class="picker-label">Run B</div>
+        <div class="picker-pills">${pillsB}</div>
+      </div>
+    </div>
+    <div style="margin-bottom:16px"></div>
+
+    ${diffHtml}`;
+}
+</script>
+</body>
+</html>
