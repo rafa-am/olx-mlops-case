@@ -33,7 +33,7 @@ dev = [
 where = ["src"]
 
 [tool.setuptools.package-data]
-"mlt" = ["templates/**/*", "templates/**/.*"]
+"mlt" = ["templates/**/*", "templates/**/.*", "ui/templates/*"]
 
 [tool.ruff]
 line-length = 100
