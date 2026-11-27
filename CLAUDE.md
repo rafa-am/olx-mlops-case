@@ -44,7 +44,7 @@ If anything in the code contradicts `docs/design.md`, stop and ask before procee
 ## Structure
 
 ```
-src/mlt/{cli,core,model,runners,datasources,runstore,serving,templates/{iris,blank}}
+src/mlt/{cli,core,model,runners,datasources,runstore,serving,ui,templates/{iris,blank}}
 tests/
 docs/{design.md,architecture.md}
 README.md  DECISIONS.md  AI_USAGE.md
@@ -55,7 +55,7 @@ README.md  DECISIONS.md  AI_USAGE.md
 - Install for development: `pip install -e ".[dev]"`
 - Tests: `pytest` (Docker tests are marked `docker` and skipped without Docker; `pytest -m docker` runs them only)
 - End-to-end example: `mlt init /tmp/demo --template iris && mlt train /tmp/demo && mlt runs list`
-- Formatting and lint: to be defined in step 1 (suggestion: ruff).
+- Formatting and lint: `ruff format src tests` and `ruff check src tests`.
 
 ## AI usage log (required)
 
@@ -63,7 +63,7 @@ At the end of each step, add to `AI_USAGE.md` (section "What the AI generated an
 
 ## Out of scope
 
-Authentication, data versioning, rollback and A/B, monitoring, GPU, distributed training, UI, CPU and memory limits, run cleanup, route versioning, data statistics in the manifest. The cloud (AWS) is design only.
+Authentication, data versioning, rollback and A/B, monitoring, GPU, distributed training, CPU and memory limits, run cleanup, route versioning, data statistics in the manifest. The cloud (AWS) is design only. A local Web UI was delivered as v0.3.0 (`src/mlt/ui`) and is experimental — no automated tests, not part of the original scope.
 
 - Installation: Python `>=3.10` on the host (`pyproject.toml`). `mlt --version` shows version, Python and Docker detection (available and daemon active). The README lists Docker running (optional) and network on first build as prerequisites.
 - `mlt init <folder>`: creates a new folder, refuses non-empty folder (exit 2), generates `.gitignore` with `.mlt/`, does not run `git init`, prints next steps.
