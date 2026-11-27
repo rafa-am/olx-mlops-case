@@ -1641,9 +1641,15 @@ function _buildNewProjectView(selectedTemplate, result, errorMsg, templates) {
             <tbody>${createdRows}</tbody>
           </table>
         </div>
-        <p style="font-size:12px;color:var(--fg3)">
-          Restart <code>mlt ui ${escHtml(result.directory)}</code> to open this project.
-        </p>
+        <div style="border-left:4px solid var(--warn);background:var(--warn-bg);
+            border-radius:0 var(--r) var(--r) 0;padding:12px 14px;margin-top:4px">
+          <strong style="font-size:13px;color:var(--warn)">To open this project in the UI</strong>
+          <p style="font-size:13px;margin-top:4px">
+            The UI does not support switching projects at runtime.
+            Restart the server with:<br>
+            <code style="font-size:12px">mlt ui ${escHtml(result.directory)}</code>
+          </p>
+        </div>
       </div>`;
   }
 
