@@ -12,7 +12,7 @@ The scientist provides `model.py`, `requirements.txt`, and data. Everything else
 
 ### Step 1 — Create a project from the iris template
 
-Scaffolds a new project folder with a working Iris classifier — ready to check and train immediately.
+`mlt init` is the fastest way to start a new project: it scaffolds a folder that already follows the `mlt` contract (`model.py`, `requirements.txt`, and the optional config files), so you can check and train immediately without writing any boilerplate.
 
 ```bash
 mlt init ~/demo --template iris
