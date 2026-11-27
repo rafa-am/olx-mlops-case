@@ -257,8 +257,33 @@ class _VerifyState:
         self.status: str = "idle"             # idle | running | done | failed
         self.error: str | None = None
         self.result: dict | None = None       # VerifyResult fields on completion
+        self.steps: list = []                 # [{name, label, status}] — same as _TrainState
         self._thread: threading.Thread | None = None
         self._runner = None
+
+    def _init_steps(self) -> None:
+        self.steps = [
+            {"name": name, "label": label, "status": "pending"}
+            for name, label in _TRAIN_STEPS
+        ]
+
+    def _on_step(self, name: str) -> None:
+        with self._lock:
+            for s in self.steps:
+                if s["status"] == "running":
+                    s["status"] = "done"
+            for s in self.steps:
+                if s["name"] == name:
+                    s["status"] = "running"
+                    break
+
+    def _finish_steps(self, failed: bool = False) -> None:
+        with self._lock:
+            for s in self.steps:
+                if s["status"] == "running":
+                    s["status"] = "failed" if failed else "done"
+                elif s["status"] == "pending" and failed:
+                    break
 
     def _on_run_created(self, run_id: str) -> None:
         # Called from the training thread as soon as the new run record exists,
@@ -275,6 +300,7 @@ class _VerifyState:
             self.error = None
             self.result = None
             self.status = "running"
+            self._init_steps()
 
         def _run() -> None:
             try:
@@ -285,7 +311,9 @@ class _VerifyState:
                     runner=runner,
                     on_runner_created=lambda r: setattr(self, "_runner", r),
                     on_run_created=self._on_run_created,
+                    on_step=self._on_step,
                 )
+                self._finish_steps(failed=False)
                 with self._lock:
                     if self.status != "failed":
                         self.new_run_id = r.new_run_id
@@ -301,6 +329,7 @@ class _VerifyState:
                         }
                         self.status = "done"
             except Exception as exc:
+                self._finish_steps(failed=True)
                 with self._lock:
                     if self.status != "failed":
                         self.error = str(exc)
@@ -322,6 +351,7 @@ class _VerifyState:
                 "new_run_id": self.new_run_id,
                 "error":      self.error,
                 "result":     self.result,
+                "steps":      list(self.steps),
             }
 
 

@@ -1754,6 +1754,7 @@ function buildVerifyView(orig, snap) {
           <button class="btn btn-ghost" onclick="cancelVerify()"
             style="border-color:var(--fail);color:var(--fail);flex-shrink:0">Cancel</button>
         </div>
+        <div id="verify-steps-list" style="margin-bottom:12px">${_renderSteps(snap.steps)}</div>
         <div class="log-section">
           <h4 id="verify-log-label">${snap.new_run_id ? 'train.log' : 'build.log'}</h4>
           <div class="log-block" id="verify-log-block">(waiting for output…)</div>
@@ -1864,6 +1865,7 @@ function startVerifyPoll(orig) {
 
       const phaseEl  = $('#verify-phase');
       const runIdEl  = $('#verify-run-id');
+      const stepsEl  = $('#verify-steps-list');
       const labelEl  = $('#verify-log-label');
       const logBlock = $('#verify-log-block');
       const building = !snap.new_run_id;
@@ -1872,6 +1874,7 @@ function startVerifyPoll(orig) {
       if (runIdEl && snap.new_run_id) {
         runIdEl.innerHTML = `<span class="mono">${escHtml(snap.new_run_id)}</span>`;
       }
+      if (stepsEl && snap.steps) stepsEl.innerHTML = _renderSteps(snap.steps);
       if (labelEl) labelEl.textContent = building ? 'build.log' : 'train.log';
       if (logBlock) {
         try {
