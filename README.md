@@ -376,7 +376,7 @@ mlt ui .          # open the UI for the current project
 mlt ui ~/demo     # open the UI for a specific project
 ```
 
-The server starts on `http://127.0.0.1:4000` by default (`--port` to change). Press `Ctrl+C` to stop it.
+The server starts on `http://127.0.0.1:8080` by default (`--port` to change). Press `Ctrl+C` to stop it.
 
 ### What the UI covers
 
