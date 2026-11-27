@@ -29,12 +29,18 @@ class Runner(ABC):
         """
 
     @abstractmethod
-    def build_env(self, on_slow_build: "Callable[[], None] | None" = None) -> str:
+    def build_env(
+        self,
+        on_slow_build: "Callable[[], None] | None" = None,
+        log_path: "Path | None" = None,
+    ) -> str:
         """Prepare the isolated environment and return the pip-freeze lock string.
 
         Raises MltEnvironmentError (exit 6) if the build fails.
         ``on_slow_build`` is called once if the build is known to take time
         (e.g. first Docker build) so the caller can print a progress hint.
+        ``log_path`` — when provided, subprocess output from the build steps is
+        appended to this file in addition to being available for error messages.
         """
 
     @abstractmethod

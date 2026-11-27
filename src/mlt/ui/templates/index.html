@@ -720,15 +720,10 @@ function buildTrainView(params, trainStatus) {
             Cancel
           </button>
         </div>
-        ${trainStatus.run_id ? `
         <div class="log-section" id="train-log-section">
-          <h4>train.log</h4>
-          <div class="log-block" id="train-log-block">Loading log…</div>
-        </div>` : `
-        <div class="log-section" id="train-log-section" style="display:none">
-          <h4>train.log</h4>
-          <div class="log-block" id="train-log-block"></div>
-        </div>`}
+          <h4 id="train-log-label">${trainStatus.run_id ? 'train.log' : 'build.log'}</h4>
+          <div class="log-block" id="train-log-block">(waiting for output…)</div>
+        </div>
       </div>`;
   } else if (trainStatus.status === 'done' && trainStatus.run_id) {
     statusHtml = `
@@ -864,20 +859,25 @@ function startTrainPoll() {
       const logSec   = $('#train-log-section');
       const logBlock = $('#train-log-block');
 
-      if (phaseEl) phaseEl.textContent = status.run_id ? 'Training…' : 'Building environment…';
+      const building = !status.run_id;
+      if (phaseEl) phaseEl.textContent = building ? 'Building environment…' : 'Training…';
 
       if (runIdEl && status.run_id) {
         runIdEl.innerHTML = `<span style="font-family:var(--mono);font-size:12px">${escHtml(status.run_id)}</span>`;
       }
 
-      // Show log section once run_id is available
-      if (status.run_id && logSec && logBlock) {
-        logSec.style.display = '';
+      // Poll the right log depending on phase
+      const labelEl = $('#train-log-label');
+      if (labelEl) labelEl.textContent = building ? 'build.log' : 'train.log';
+
+      if (logBlock) {
         try {
-          const logData = await api(`/api/runs/${encodeURIComponent(status.run_id)}/log?tail=40`);
+          const url = building
+            ? '/api/build/log?tail=40'
+            : `/api/runs/${encodeURIComponent(status.run_id)}/log?tail=40`;
+          const logData = await api(url);
           const lines = logData.lines || [];
           logBlock.textContent = lines.length ? lines.join('\n') : '(no output yet)';
-          // Auto-scroll to bottom
           logBlock.scrollTop = logBlock.scrollHeight;
         } catch (_) {}
       }

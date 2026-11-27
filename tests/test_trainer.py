@@ -7,6 +7,8 @@ The venv is cached at ~/.mlt/envs/<hash>/ so the first run is slow
 
 from __future__ import annotations
 
+import shutil
+
 import pytest
 
 from mlt.core.errors import ContractError
@@ -167,3 +169,46 @@ def test_manifest_has_all_required_fields(minimal_project):
     assert d["inputs"]["deps"]["lock"]  # pip freeze not empty
     assert d["environment"]["runner"] == "venv"
     assert d["outputs"]["metrics"]
+
+
+# ---------------------------------------------------------------------------
+# Build log
+# ---------------------------------------------------------------------------
+
+
+def test_build_log_archived_in_run_dir(minimal_project):
+    """When the venv is built fresh, build.log ends up inside run_dir."""
+    from mlt.runners.venv import VenvRunner, _ENVS_DIR
+
+    p = minimal_project
+
+    # Evict the cached env so a real build is forced.
+    runner = VenvRunner(p["project_dir"] / "requirements.txt", "3.10")
+    env_dir = _ENVS_DIR / runner.get_env_hash()
+    if env_dir.exists():
+        shutil.rmtree(env_dir)
+
+    run_id = train(p["project_dir"], data_dir=p["data_dir"], force=True)
+    store = RunStore(p["project_dir"])
+    run_dir = store.run_dir(run_id)
+
+    assert (run_dir / "build.log").exists(), "build.log should be archived in run_dir"
+    assert (run_dir / "build.log").stat().st_size > 0, "build.log should be non-empty"
+    # Verify it is gone from .mlt/ (moved, not copied).
+    assert not (p["project_dir"] / ".mlt" / "build.log").exists()
+
+
+def test_build_log_absent_on_cache_hit(minimal_project):
+    """When the venv is already cached, build.log is not created in run_dir."""
+    p = minimal_project
+
+    # First run warms the cache.
+    train(p["project_dir"], data_dir=p["data_dir"])
+
+    # Second run (force=True, different seed → new run_id) reuses cached env.
+    run_id = train(p["project_dir"], data_dir=p["data_dir"], seed=99, force=True)
+    store = RunStore(p["project_dir"])
+    run_dir = store.run_dir(run_id)
+
+    # build.log must NOT appear — no build happened.
+    assert not (run_dir / "build.log").exists()

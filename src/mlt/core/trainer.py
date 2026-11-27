@@ -128,9 +128,21 @@ def train(
             return existing.run_id
 
     # 6. Build environment -------------------------------------------------
+    # build.log captures pip/docker output during env build, before run_dir
+    # exists.  It is moved into run_dir after the run is created so it is
+    # archived alongside train.log.  It stays at .mlt/build.log on failure
+    # so the user can inspect it without digging into a run directory.
+    mlt_dir = project_dir / ".mlt"
+    mlt_dir.mkdir(exist_ok=True)
+    build_log_path = mlt_dir / "build.log"
+    build_log_path.unlink(missing_ok=True)  # fresh log for this attempt
+
     req_txt = project_dir / "requirements.txt"
     runner_instance = _create_runner(runner, req_txt, python_minor)
-    lock_str = runner_instance.build_env(on_slow_build=on_slow_build)
+    lock_str = runner_instance.build_env(
+        on_slow_build=on_slow_build,
+        log_path=build_log_path,
+    )
     deps_lock = [line for line in lock_str.splitlines() if line.strip()]
     eh = runner_instance.get_env_hash()
 
@@ -162,6 +174,10 @@ def train(
     _copy_code(project_dir, run_dir / "code", exclude_names=extra_exclude | {".mlt"})
     _copy_if_exists(project_dir / "params.yaml", run_dir / "params.yaml")
     _copy_if_exists(project_dir / "schema.yaml", run_dir / "schema.yaml")
+
+    # Archive build.log in the run directory (empty / absent → cache hit, skip).
+    if build_log_path.exists() and build_log_path.stat().st_size > 0:
+        shutil.move(str(build_log_path), str(run_dir / "build.log"))
 
     # Hold an exclusive flock on train.lock for the entire training duration.
     # Any other process can detect an orphaned run by trying a non-blocking

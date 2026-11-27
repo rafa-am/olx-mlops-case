@@ -57,7 +57,11 @@ class VenvRunner(Runner):
             self._env_hash_val = env_hash(deps_h, self._python_minor)
         return self._env_hash_val
 
-    def build_env(self, on_slow_build: Callable[[], None] | None = None) -> str:
+    def build_env(
+        self,
+        on_slow_build: Callable[[], None] | None = None,
+        log_path: Path | None = None,
+    ) -> str:
         """Create or reuse the venv. Returns ``pip freeze`` output."""
 
         eh = self.get_env_hash()
@@ -71,7 +75,7 @@ class VenvRunner(Runner):
                 if not _venv_ready(venv_dir):
                     if on_slow_build:
                         on_slow_build()
-                    self._create_venv(venv_dir)
+                    self._create_venv(venv_dir, log_path=log_path)
             finally:
                 fcntl.flock(lf, fcntl.LOCK_UN)
 
@@ -145,10 +149,23 @@ class VenvRunner(Runner):
     # Private helpers
     # ------------------------------------------------------------------
 
-    def _create_venv(self, venv_dir: Path) -> None:
+    def _create_venv(self, venv_dir: Path, log_path: Path | None = None) -> None:
         from mlt.core.errors import MltEnvironmentError
 
-        # Create the venv
+        def _run(cmd: list[str]) -> subprocess.CompletedProcess:
+            """Run *cmd*, writing output to log_path when provided."""
+            if log_path is None:
+                return subprocess.run(cmd, capture_output=True, text=True)
+            with open(log_path, "ab") as lf:
+                return subprocess.run(cmd, stdout=lf, stderr=subprocess.STDOUT)
+
+        def _error_text() -> str:
+            """Return tail of log_path, or empty string when not writing to file."""
+            if log_path is not None and log_path.exists():
+                return "\n".join(log_path.read_text(errors="replace").splitlines()[-20:])
+            return ""
+
+        # Create the venv (fast and noiseless; always captured, not logged)
         subprocess.run(
             [self._python_exe, "-m", "venv", str(venv_dir)],
             check=True,
@@ -173,11 +190,7 @@ class VenvRunner(Runner):
             mlt_install_args = [str(tmp_mlt_dir)]
 
         try:
-            result = subprocess.run(
-                [pip, "install", "-q"] + mlt_install_args,
-                capture_output=True,
-                text=True,
-            )
+            result = _run([pip, "install", "-q"] + mlt_install_args)
         finally:
             if tmp_mlt_dir is not None:
                 import shutil as _shutil
@@ -186,24 +199,21 @@ class VenvRunner(Runner):
         if result.returncode != 0:
             import shutil
             shutil.rmtree(venv_dir, ignore_errors=True)
+            detail = _error_text() or getattr(result, "stderr", "")
             raise MltEnvironmentError(
-                f"failed to install mlt into venv:\n{result.stderr[-500:]}"
+                f"failed to install mlt into venv:\n{detail[-500:]}"
             )
 
         # Install the scientist's requirements.
-        result = subprocess.run(
-            [pip, "install", "-q", "-r", str(self._requirements_txt)],
-            capture_output=True,
-            text=True,
-        )
+        result = _run([pip, "install", "-q", "-r", str(self._requirements_txt)])
         if result.returncode != 0:
             import shutil
-
             shutil.rmtree(venv_dir, ignore_errors=True)
-            # Show the last 1 kB of pip output to help diagnose.
-            excerpt = (result.stderr + result.stdout)[-1000:]
+            detail = _error_text() or (
+                getattr(result, "stderr", "") + getattr(result, "stdout", "")
+            )
             raise MltEnvironmentError(
-                f"build failed; install requirements failed:\n{excerpt}"
+                f"build failed; install requirements failed:\n{detail[-1000:]}"
             )
 
 

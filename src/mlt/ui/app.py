@@ -15,6 +15,7 @@ import subprocess
 import sys
 import threading
 from pathlib import Path
+
 import yaml
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
@@ -196,6 +197,15 @@ def create_ui_app(project_dir: Path) -> FastAPI:
 
         run_dir = RunStore(project_dir).run_dir(m.run_id)
         log_path = run_dir / "train.log"
+        if not log_path.exists():
+            return {"lines": []}
+        lines = log_path.read_text(encoding="utf-8", errors="replace").splitlines()
+        return {"lines": lines[-tail:]}
+
+    @app.get("/api/build/log")
+    def build_log(tail: int = 50):
+        """Return the last *tail* lines of .mlt/build.log (live during env build)."""
+        log_path = project_dir / ".mlt" / "build.log"
         if not log_path.exists():
             return {"lines": []}
         lines = log_path.read_text(encoding="utf-8", errors="replace").splitlines()

@@ -86,7 +86,11 @@ class DockerRunner(Runner):
             self._env_hash_val = env_hash(deps_h, self._python_minor)
         return self._env_hash_val
 
-    def build_env(self, on_slow_build: Callable[[], None] | None = None) -> str:
+    def build_env(
+        self,
+        on_slow_build: Callable[[], None] | None = None,
+        log_path: Path | None = None,
+    ) -> str:
         """Build the Docker image if not cached. Returns pip freeze output."""
         from mlt.core.errors import MltEnvironmentError
 
@@ -94,7 +98,7 @@ class DockerRunner(Runner):
         if not self._image_exists(tag):
             if on_slow_build:
                 on_slow_build()
-            self._build_image(tag)
+            self._build_image(tag, log_path=log_path)
 
         result = subprocess.run(
             ["docker", "run", "--rm", tag, "pip", "freeze", "--all"],
@@ -177,7 +181,7 @@ class DockerRunner(Runner):
         )
         return result.returncode == 0
 
-    def _build_image(self, tag: str) -> None:
+    def _build_image(self, tag: str, log_path: Path | None = None) -> None:
         from mlt.core.errors import MltEnvironmentError
 
         with tempfile.TemporaryDirectory() as ctx:
@@ -193,15 +197,28 @@ class DockerRunner(Runner):
                 _make_dockerfile(self._python_minor), encoding="utf-8"
             )
 
-            result = subprocess.run(
-                ["docker", "build", "-t", tag, "."],
-                capture_output=True,
-                text=True,
-                cwd=ctx,
-            )
+            if log_path is None:
+                result = subprocess.run(
+                    ["docker", "build", "-t", tag, "."],
+                    capture_output=True,
+                    text=True,
+                    cwd=ctx,
+                )
+                error_detail = (result.stderr + result.stdout)[-1000:]
+            else:
+                with open(log_path, "ab") as lf:
+                    result = subprocess.run(
+                        ["docker", "build", "-t", tag, "."],
+                        stdout=lf,
+                        stderr=subprocess.STDOUT,
+                        cwd=ctx,
+                    )
+                if log_path.exists():
+                    error_detail = "\n".join(
+                        log_path.read_text(errors="replace").splitlines()[-30:]
+                    )
+                else:
+                    error_detail = ""
 
         if result.returncode != 0:
-            raise MltEnvironmentError(
-                f"docker build failed:\n"
-                f"{(result.stderr + result.stdout)[-1000:]}"
-            )
+            raise MltEnvironmentError(f"docker build failed:\n{error_detail}")
