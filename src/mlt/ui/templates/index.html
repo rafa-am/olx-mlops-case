@@ -414,6 +414,7 @@ input[type=checkbox] { width: 14px; height: 14px; cursor: pointer; accent-color:
     <a href="#/train" data-page="train">Train</a>
     <a href="#/runs" data-page="runs">Runs</a>
     <a href="#/compare" data-page="compare">Compare</a>
+    <a href="#/serve" data-page="serve">Serve</a>
   </nav>
 
   <hr class="sb-sep">
@@ -471,6 +472,7 @@ const S = {
   runs:     null,   // cached list (all)
   selected: [],     // run_ids chosen for compare
   statusFilter: 'all',
+  serve: null,         // last /api/serve/status snapshot
 };
 
 // ===================================================================
@@ -549,6 +551,9 @@ function setActivePage(page) {
 }
 
 async function route() {
+  clearTrainPoll();
+  clearServePoll();
+
   const hash = location.hash || '#/';
   const path = hash.slice(1);  // strip '#'
 
@@ -568,6 +573,9 @@ async function route() {
     setActivePage('compare');
     const parts = path.slice(9).split('/').filter(Boolean);
     renderCompare(parts[0] || null, parts[1] || null);
+  } else if (path === '/serve') {
+    setActivePage('serve');
+    renderServe();
   } else {
     setActivePage('home');
     renderHome();
@@ -888,6 +896,305 @@ function startTrainPoll() {
 
 function clearTrainPoll() {
   if (_trainPollTimer) { clearInterval(_trainPollTimer); _trainPollTimer = null; }
+}
+
+// ===================================================================
+// SERVE
+// ===================================================================
+
+let _servePollTimer = null;
+
+async function renderServe() {
+  $('#main').innerHTML = '<div id="loading-state">Loading…</div>';
+
+  let snap = { status: 'idle', run_id: null, url: null, error: null, schema: null };
+  try { snap = await api('/api/serve/status'); } catch (_) {}
+  S.serve = snap;
+
+  let runs = [];
+  if (snap.status === 'idle' || snap.status === 'failed') {
+    try {
+      const all = await api('/api/runs?limit=50');
+      runs = all.filter(r => r.status === 'succeeded');
+    } catch (_) {}
+  }
+
+  buildServeView(snap, runs);
+  if (snap.status === 'starting') startServePoll();
+}
+
+function buildServeView(snap, runs) {
+  S.serve = snap;
+  let statusCard = '';
+  let body = '';
+
+  if (snap.status === 'starting') {
+    statusCard = `
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-title" style="margin-bottom:4px">Starting…</div>
+        <p style="font-size:13px;color:var(--fg3)">Waiting for /health to return 200.</p>
+      </div>`;
+  } else if (snap.status === 'running') {
+    const schema   = snap.schema || {};
+    const features = schema.features || {};
+    const nFeat    = Object.keys(features).length;
+    const schemaNote = nFeat > 0
+      ? `schema: loaded from /schema (${nFeat} feature${nFeat !== 1 ? 's' : ''})`
+      : 'schema: empty (this run has no schema.yaml)';
+
+    statusCard = `
+      <div class="card" style="margin-bottom:16px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div>
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+              <span style="width:8px;height:8px;border-radius:50%;background:var(--success);display:inline-block;flex-shrink:0"></span>
+              <strong>running · /health 200</strong>
+            </div>
+            <div style="font-family:var(--mono);font-size:12px;color:var(--fg2);margin-bottom:2px">
+              ${escHtml(snap.url)} · ${escHtml(snap.run_id)}
+            </div>
+            <div style="font-size:12px;color:var(--fg3);margin-bottom:2px">
+              Interactive docs at <a href="${escHtml(snap.url)}/docs" target="_blank" rel="noopener">/docs</a>
+              · schema at <a href="${escHtml(snap.url)}/schema" target="_blank" rel="noopener">/schema</a>
+            </div>
+            <div style="font-size:12px;color:var(--fg3)">${escHtml(schemaNote)}</div>
+          </div>
+          <button class="btn btn-ghost" style="border-color:var(--fail);color:var(--fail);flex-shrink:0"
+            onclick="confirmStopServe()">Stop service</button>
+        </div>
+      </div>`;
+
+    const predictPanel = _buildPredictPanel(snap, features, nFeat > 0);
+    const curlText     = _buildCurl(snap, features, nFeat > 0);
+
+    body = `
+      <div class="detail-grid">
+        ${predictPanel}
+        <div class="card" style="margin-bottom:0" id="request-card">
+          <div class="card-title" style="margin-bottom:8px">Request</div>
+          <div class="log-block" id="curl-block" style="margin-bottom:16px;white-space:pre-wrap">${escHtml(curlText)}</div>
+          <div id="response-area" style="display:none">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+              <span class="card-title">Response</span>
+              <span id="response-status" style="font-size:12px;font-weight:600"></span>
+            </div>
+            <div class="log-block" id="response-block"></div>
+          </div>
+        </div>
+      </div>`;
+  } else {
+    // idle or failed — show run picker
+    const errorHtml = snap.status === 'failed' && snap.error
+      ? `<p style="color:var(--fail);font-size:13px;margin-bottom:12px">${escHtml(snap.error)}</p>` : '';
+    const runBtns = runs.length
+      ? runs.map(r => `<button class="btn btn-ghost mono"
+            style="font-size:12px" onclick="confirmStartServe('${escHtml(r.run_id)}')">${escHtml(r.run_id)}</button>`).join('\n')
+      : '<p style="color:var(--fg3);font-size:13px">No succeeded runs yet — train a model first.</p>';
+
+    body = `
+      <div class="card">
+        <div class="card-title" style="margin-bottom:4px">No active service</div>
+        <p style="font-size:13px;color:var(--fg2);margin-bottom:12px">Choose a succeeded run to serve.</p>
+        ${errorHtml}
+        <div style="display:flex;flex-wrap:wrap;gap:8px">${runBtns}</div>
+      </div>`;
+  }
+
+  $('#main').innerHTML = `
+    <h1 class="page-title">Serve</h1>
+    <p class="page-sub">Start the inference API for a succeeded run.</p>
+    ${statusCard}${body}`;
+
+  // Wire up input → curl update after DOM is ready
+  if (snap.status === 'running') {
+    $$('.feature-input').forEach(inp => inp.addEventListener('input', _updateCurl));
+    const jsonArea = $('#json-body');
+    if (jsonArea) jsonArea.addEventListener('input', _updateCurl);
+  }
+}
+
+function _buildPredictPanel(snap, features, hasFeatures) {
+  if (!hasFeatures) {
+    const example = JSON.stringify({ inputs: [{ feature: 'value' }] }, null, 2);
+    return `
+      <div class="card" style="margin-bottom:0">
+        <div class="card-title" style="margin-bottom:8px">Test /predict</div>
+        <div style="background:rgba(255,180,0,.12);border:1px solid rgba(255,180,0,.35);
+            border-radius:var(--r);padding:12px;margin-bottom:14px;font-size:13px;color:var(--fg1)">
+          This run has no schema (/schema returned {}). Fields cannot be built and the API does
+          not validate them. Edit the request body as JSON.
+        </div>
+        <label style="font-size:12px;color:var(--fg3);display:block;margin-bottom:4px">Request body (JSON)</label>
+        <textarea id="json-body" style="width:100%;box-sizing:border-box;min-height:120px;
+            font-family:var(--mono);font-size:12px;border:1px solid var(--border);
+            border-radius:var(--r);padding:10px;background:var(--bg);color:var(--fg1);
+            resize:vertical">${escHtml(example)}</textarea>
+        <button class="btn btn-primary" style="margin-top:12px" onclick="doPredict()">Predict</button>
+      </div>`;
+  }
+
+  const entries = Object.entries(features);
+  let rows = '';
+  for (let i = 0; i < entries.length; i += 2) {
+    rows += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+      ${_featureField(entries[i][0], entries[i][1])}
+      ${entries[i + 1] ? _featureField(entries[i + 1][0], entries[i + 1][1]) : '<div></div>'}
+    </div>`;
+  }
+
+  return `
+    <div class="card" style="margin-bottom:0">
+      <div class="card-title" style="margin-bottom:4px">Test /predict</div>
+      <p style="font-size:12px;color:var(--fg3);margin-bottom:14px">
+        Fields come from the run's schema (GET /schema).
+        Leave one empty to see the 422 error with index and field.
+      </p>
+      ${rows}
+      <button class="btn btn-primary" onclick="doPredict()">Predict</button>
+    </div>`;
+}
+
+function _featureField(name, spec) {
+  const t   = spec.type || 'float';
+  const val = spec.allowed ? spec.allowed[0]
+    : (t === 'int' ? (spec.min ?? 0) : t === 'float' ? (spec.min ?? 0.0) : '');
+  return `<div>
+    <label style="font-size:12px;color:var(--fg3);display:block;margin-bottom:4px">${escHtml(name)}</label>
+    <input id="feat-${escHtml(name)}" class="feature-input"
+      data-name="${escHtml(name)}" data-type="${escHtml(t)}"
+      type="text" value="${escHtml(String(val))}"
+      style="width:100%;box-sizing:border-box;border:1px solid var(--border);
+        border-radius:var(--r);padding:8px 10px;background:var(--bg);color:var(--fg1);font-size:14px">
+  </div>`;
+}
+
+function _buildCurl(snap, features, hasFeatures) {
+  const url = `${snap.url}/predict`;
+  let record;
+  if (hasFeatures) {
+    record = {};
+    Object.entries(features).forEach(([name, spec]) => {
+      const inp = $(`#feat-${name}`);
+      const raw = inp ? inp.value.trim() : String(spec.allowed ? spec.allowed[0] : (spec.min ?? 0));
+      const t   = spec.type || 'float';
+      record[name] = raw === '' ? null
+        : t === 'int'   ? (parseInt(raw, 10)  || 0)
+        : t === 'float' ? (parseFloat(raw) || 0.0)
+        : raw;
+    });
+  } else {
+    const area = $('#json-body');
+    try { record = area ? JSON.parse(area.value)?.inputs?.[0] ?? {} : {}; }
+    catch (_) { record = { feature: 'value' }; }
+  }
+  const bodyStr = JSON.stringify({ inputs: [record] });
+  return `curl -X POST ${url} \\\n  -H "Content-Type: application/json" \\\n  -d '${bodyStr}'`;
+}
+
+function _updateCurl() {
+  const snap = S.serve;
+  if (!snap || snap.status !== 'running') return;
+  const features   = snap.schema?.features || {};
+  const hasFeatures = Object.keys(features).length > 0;
+  const el = $('#curl-block');
+  if (el) el.textContent = _buildCurl(snap, features, hasFeatures);
+}
+
+async function doPredict() {
+  const snap = S.serve;
+  if (!snap || snap.status !== 'running') return;
+  const features    = snap.schema?.features || {};
+  const hasFeatures = Object.keys(features).length > 0;
+
+  let body;
+  if (hasFeatures) {
+    const record = {};
+    $$('.feature-input').forEach(inp => {
+      const raw = inp.value.trim();
+      const t   = inp.dataset.type;
+      record[inp.dataset.name] = raw === '' ? null
+        : t === 'int'   ? parseInt(raw, 10)
+        : t === 'float' ? parseFloat(raw)
+        : raw;
+    });
+    body = JSON.stringify({ inputs: [record] });
+  } else {
+    body = ($('#json-body') || {}).value || '{"inputs":[]}';
+  }
+
+  const respArea   = $('#response-area');
+  const respBlock  = $('#response-block');
+  const respStatus = $('#response-status');
+  if (respArea)   respArea.style.display   = '';
+  if (respBlock)  respBlock.textContent    = 'Loading…';
+  if (respStatus) respStatus.textContent   = '';
+
+  try {
+    const r    = await fetch('/api/serve/predict', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body,
+    });
+    const data = await r.json();
+    if (respStatus) {
+      respStatus.textContent = `HTTP ${r.status}`;
+      respStatus.style.color = r.ok ? 'var(--success)' : 'var(--fail)';
+    }
+    if (respBlock) respBlock.textContent = JSON.stringify(data, null, 2);
+  } catch (e) {
+    if (respBlock) respBlock.textContent = String(e);
+  }
+}
+
+async function confirmStartServe(runId) {
+  const ok = await showModal({
+    title: 'Start service',
+    body:  `Serve run ${runId} on port 8000?`,
+    confirmLabel: 'Start',
+  });
+  if (!ok) return;
+  try {
+    await fetch('/api/serve', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ run_id: runId, port: 8000 }),
+    });
+  } catch (_) {}
+  renderServe();
+}
+
+async function confirmStopServe() {
+  const ok = await showModal({
+    title: 'Stop service',
+    body:  'Stop the active inference service?',
+    confirmLabel: 'Stop',
+    danger: true,
+  });
+  if (!ok) return;
+  try { await fetch('/api/serve', { method: 'DELETE' }); } catch (_) {}
+  renderServe();
+}
+
+function startServePoll() {
+  _servePollTimer = setInterval(async () => {
+    try {
+      const snap = await api('/api/serve/status');
+      if (snap.status !== 'starting') {
+        clearServePoll();
+        S.serve = snap;
+        let runs = [];
+        if (snap.status === 'idle' || snap.status === 'failed') {
+          try {
+            const all = await api('/api/runs?limit=50');
+            runs = all.filter(r => r.status === 'succeeded');
+          } catch (_) {}
+        }
+        buildServeView(snap, runs);
+      }
+    } catch (_) {}
+  }, 2000);
+}
+
+function clearServePoll() {
+  if (_servePollTimer) { clearInterval(_servePollTimer); _servePollTimer = null; }
 }
 
 // ===================================================================

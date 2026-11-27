@@ -10,15 +10,20 @@ from __future__ import annotations
 
 import dataclasses
 import importlib.metadata
+import json
 import os
+import socket
 import subprocess
 import sys
 import threading
+import time
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 import yaml
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 
 from mlt.core.diff import diff_runs_by_id
 from mlt.core.errors import MltError
@@ -109,6 +114,89 @@ class _TrainState:
             }
 
 
+class _ServeState:
+    """State for a single inference service process."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self.run_id: str | None = None
+        self.host: str = "127.0.0.1"
+        self.port: int | None = None
+        self.status: str = "idle"   # idle | starting | running | failed
+        self.error: str | None = None
+        self._proc: subprocess.Popen | None = None
+
+    def start(self, run_id: str, cmd: list, host: str, port: int) -> None:
+        with self._lock:
+            if self.status in ("starting", "running"):
+                raise RuntimeError("A service is already running.")
+            self.run_id = run_id
+            self.host = host
+            self.port = port
+            self.status = "starting"
+            self.error = None
+
+        self._proc = subprocess.Popen(cmd)
+
+        def _wait() -> None:
+            url = f"http://{host}:{port}/health"
+            deadline = time.monotonic() + 60
+            while time.monotonic() < deadline:
+                proc = self._proc
+                if proc is None or proc.poll() is not None:
+                    with self._lock:
+                        self.status = "failed"
+                        self.error = "server exited unexpectedly during startup"
+                    return
+                try:
+                    with urllib.request.urlopen(url, timeout=2) as r:
+                        if r.status == 200:
+                            with self._lock:
+                                self.status = "running"
+                            return
+                except Exception:
+                    pass
+                time.sleep(0.5)
+            proc = self._proc
+            if proc:
+                proc.terminate()
+                proc.wait()
+            with self._lock:
+                self.status = "failed"
+                self.error = "server did not become healthy within 60s"
+
+        threading.Thread(target=_wait, daemon=True).start()
+
+    def stop(self) -> None:
+        proc = self._proc
+        if proc and proc.poll() is None:
+            proc.terminate()
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+        with self._lock:
+            self.status = "idle"
+            self.run_id = None
+            self.port = None
+            self.error = None
+            self._proc = None
+
+    def snapshot(self) -> dict:
+        with self._lock:
+            if self.status == "running" and self._proc and self._proc.poll() is not None:
+                self.status = "failed"
+                self.error = f"server exited with code {self._proc.returncode}"
+            return {
+                "status": self.status,
+                "run_id": self.run_id,
+                "host": self.host,
+                "port": self.port,
+                "url": f"http://{self.host}:{self.port}" if self.port else None,
+                "error": self.error,
+            }
+
+
 def _not_found(exc: MltError) -> HTTPException:
     return HTTPException(status_code=404, detail=str(exc))
 
@@ -117,6 +205,7 @@ def create_ui_app(project_dir: Path) -> FastAPI:
     """Return a FastAPI app bound to *project_dir*."""
     app = FastAPI(title="mlt UI", docs_url=None, redoc_url=None)
     _train = _TrainState()
+    _serve = _ServeState()
 
     # Reconcile any runs left in 'running' by a previous server session.
     from mlt.core.reconcile import reconcile_running_runs
@@ -316,6 +405,123 @@ def create_ui_app(project_dir: Path) -> FastAPI:
             _train.status = "failed"
             _train.error  = "Cancelled by user."
         return {"cancelled": True}
+
+    # ------------------------------------------------------------------
+    # Serve (inference API process)
+    # ------------------------------------------------------------------
+
+    def _build_serve_cmd(manifest, run_dir: Path, host: str, port: int) -> list:
+        env_runner = manifest.environment.get("runner", "venv")
+        env_hash = manifest.environment.get("env_hash", "")
+        if env_runner == "docker":
+            return [
+                "docker", "run", "--rm",
+                "-p", f"{host}:{port}:8000",
+                "-v", f"{run_dir.resolve()}:/run:ro",
+                f"mlt-env:{env_hash[:12]}",
+                "python", "-m", "mlt.serving.server", "/run",
+                "--host", "0.0.0.0", "--port", "8000",
+            ]
+        venv_dir = Path.home() / ".mlt" / "envs" / env_hash
+        python = venv_dir / "bin" / "python"
+        if not python.exists():
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"venv for this run not found ({venv_dir}); "
+                    "re-train to rebuild the environment"
+                ),
+            )
+        return [
+            str(python), "-m", "mlt.serving.server", str(run_dir),
+            "--host", host, "--port", str(port),
+        ]
+
+    @app.get("/api/serve/status")
+    def serve_status():
+        """Current serve process state, with schema when running."""
+        from mlt.runstore.store import RunStore
+
+        snap = _serve.snapshot()
+        schema: dict | None = None
+        if snap["status"] == "running" and snap["run_id"]:
+            try:
+                m = describe_run(project_dir, snap["run_id"])
+                run_dir = RunStore(project_dir).run_dir(m.run_id)
+                p = run_dir / "schema_effective.yaml"
+                schema = yaml.safe_load(p.read_text(encoding="utf-8")) or {} if p.exists() else {}
+            except Exception:
+                schema = {}
+        snap["schema"] = schema
+        return snap
+
+    @app.post("/api/serve")
+    async def start_serve(request: Request):
+        """Start an inference service for a succeeded run."""
+        from mlt.runstore.store import RunStore
+
+        body    = await request.json()
+        run_id  = body.get("run_id")
+        port    = int(body.get("port", 8000))
+        host    = body.get("host", "127.0.0.1")
+
+        try:
+            m = describe_run(project_dir, run_id)
+        except MltError as exc:
+            raise _not_found(exc) from exc
+
+        if m.status != "succeeded":
+            raise HTTPException(
+                status_code=409,
+                detail=f"run {m.run_id} has status '{m.status}'; only succeeded runs can be served",
+            )
+
+        with socket.socket() as s:
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            try:
+                s.bind((host, port))
+            except OSError:
+                raise HTTPException(status_code=409, detail=f"port {port} is already in use")
+
+        run_dir = RunStore(project_dir).run_dir(m.run_id)
+        cmd = _build_serve_cmd(m, run_dir, host, port)
+
+        try:
+            _serve.start(m.run_id, cmd, host, port)
+        except RuntimeError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+        return {"started": True}
+
+    @app.delete("/api/serve")
+    def stop_serve():
+        """Stop the active inference service."""
+        snap = _serve.snapshot()
+        if snap["status"] == "idle":
+            raise HTTPException(status_code=409, detail="no active service")
+        _serve.stop()
+        return {"stopped": True}
+
+    @app.post("/api/serve/predict")
+    async def serve_predict(request: Request):
+        """Proxy a predict request to the running inference service."""
+        snap = _serve.snapshot()
+        if snap["status"] != "running":
+            raise HTTPException(status_code=409, detail="no active service")
+        body = await request.body()
+        req = urllib.request.Request(
+            f"{snap['url']}/predict",
+            data=body,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=30) as r:
+                return JSONResponse(content=json.loads(r.read()), status_code=200)
+        except urllib.error.HTTPError as exc:
+            return JSONResponse(content=json.loads(exc.read()), status_code=exc.code)
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail=f"predict failed: {exc}") from exc
 
     @app.get("/api/diff/{run_id_a}/{run_id_b}")
     def diff(run_id_a: str, run_id_b: str):
