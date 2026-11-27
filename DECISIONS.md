@@ -247,7 +247,9 @@ Each alternative below was evaluated and discarded, with the reason.
 
 The MVP delivers the full local workflow; what follows was left out by choice.
 
-**Out of scope:** authentication, data versioning, rollback and A/B, monitoring and drift, GPU, distributed training, UI, CPU and memory limits, old run cleanup, and API route versioning.
+**Out of scope:** authentication, data versioning, rollback and A/B, monitoring and drift, GPU, distributed training, CPU and memory limits, old run cleanup, and API route versioning.
+
+**Delivered as v0.3.0 (was originally out of scope):** local Web UI (`mlt ui`) — read-only views (home, runs, diff) plus train, serve, and verify with live progress. The core/CLI contract was not changed; the UI calls the same `mlt.core` functions used by the CLI.
 
 **Evolution, in the order I would do it:**
 
@@ -279,8 +281,9 @@ Approximate time spent per step (generation + review + correction rounds):
 | 5 | FastAPI serving, mlt serve, 6 bug fixes | ~1 h |
 | 6 | Failure-mode tests, KeyboardInterrupt fix | ~15 min |
 | 7 | README, docs/architecture.md | ~30 min |
+| Web UI | FastAPI SPA: home, runs, train, serve, verify, diff, new project | ~6 h |
 
-**Total: approximately 4–5 hours of active work** (excluding test execution time for slow/docker suites).
+**Total: approximately 10–11 hours of active work** (excluding test execution time for slow/docker suites).
 
 **What I would do differently with more time:**
 
@@ -289,6 +292,8 @@ Approximate time spent per step (generation + review + correction rounds):
 - **Deliver the `blank` template.** It is P2 and small (~30 min). It completes the story for scientists not using scikit-learn and makes `MLModel` more tangible than just a base class described in the README.
 
 - **Add an end-to-end subprocess test for `mlt serve`.** The serving tests use `TestClient` (no subprocess). A test that actually spawns `uvicorn` via `serve_cmd` would give stronger confidence in the full `serve_cmd → subprocess → uvicorn → model.predict` path.
+
+- **Add UI tests.** The Web UI has no automated tests beyond the existing core/CLI suite. The main risk is frontend regressions (broken polling, stale state after navigation). A lightweight approach: a handful of `httpx` tests against `create_ui_app()` for the API endpoints, plus a few Playwright smoke tests for the most critical flows (start train, poll to done, navigate away).
 
 **On feature engineering and scope:**
 
