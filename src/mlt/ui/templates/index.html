@@ -840,11 +840,14 @@ function buildTrainView(params, trainStatus) {
         </div>
       </div>
     </div>
-    <div style="display:flex;gap:10px;align-items:center">
-      <button class="btn btn-primary" id="start-train-btn" onclick="confirmTrain()">
-        Start training
-      </button>
-      ${trainStatus.status !== 'idle' ? `<a href="#/runs" class="btn btn-ghost">View all runs</a>` : ''}
+    <div>
+      <div style="display:flex;gap:10px;align-items:center">
+        <button class="btn btn-primary" id="start-train-btn" onclick="confirmTrain()">
+          Start training
+        </button>
+        ${trainStatus.status !== 'idle' ? `<a href="#/runs" class="btn btn-ghost">View all runs</a>` : ''}
+      </div>
+      <div id="train-error-msg" style="display:none;margin-top:8px;font-size:13px;color:var(--fail)"></div>
     </div>` : ''}`;
 
   if (running) startTrainPoll();
@@ -893,7 +896,7 @@ async function confirmTrain() {
   if (btn) { btn.disabled = true; btn.textContent = 'Starting…'; }
 
   try {
-    await fetch('/api/train', {
+    const r = await fetch('/api/train', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -904,11 +907,17 @@ async function confirmTrain() {
         seed,
       }),
     });
+    if (!r.ok) {
+      let msg = r.statusText;
+      try { msg = (await r.json()).detail || msg; } catch (_) {}
+      throw new Error(msg);
+    }
     // Re-render immediately so the status card appears
     const status = await api('/api/train/status');
     buildTrainView(params, status);
   } catch (e) {
-    alert(`Failed to start training: ${e.message}`);
+    const errEl = $('#train-error-msg');
+    if (errEl) { errEl.style.display = 'block'; errEl.textContent = e.message; }
     if (btn) { btn.disabled = false; btn.textContent = 'Start training'; }
   }
 }
@@ -1750,9 +1759,10 @@ function buildVerifyView(orig, snap) {
           Runner <span style="color:var(--fg3);font-weight:400">(default: same as original — <code>${escHtml(origRunner)}</code>)</span>
         </div>
         <div class="filter-chips" style="margin-bottom:16px">${verifyRunnerPills}</div>
-        <button class="btn btn-primary" onclick="_startVerify('${escHtml(orig.run_id)}')">
+        <button class="btn btn-primary" id="start-verify-btn" onclick="_startVerify('${escHtml(orig.run_id)}')">
           Start verification
         </button>
+        <div id="verify-error-msg" style="display:none;margin-top:8px;font-size:13px;color:var(--fail)"></div>
       </div>`;
   } else if (snap.status === 'running') {
     const phase = snap.new_run_id ? 'Re-training…' : 'Building environment…';
@@ -1836,17 +1846,26 @@ function _selectVerifyRunner(r) {
 async function _startVerify(runId) {
   const active = $('.verify-runner-pill.active');
   const runner = active ? active.dataset.runner : null;
+  const btn = $('#start-verify-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Starting…'; }
   try {
-    await fetch(`/api/verify/${encodeURIComponent(runId)}`, {
+    const r = await fetch(`/api/verify/${encodeURIComponent(runId)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ runner }),
     });
+    if (!r.ok) {
+      let msg = r.statusText;
+      try { msg = (await r.json()).detail || msg; } catch (_) {}
+      throw new Error(msg);
+    }
     const snap = await api('/api/verify/status');
     const orig = await api(`/api/runs/${encodeURIComponent(runId)}`);
     buildVerifyView(orig, snap);
   } catch (e) {
-    alert(`Failed to start verification: ${e.message}`);
+    const errEl = $('#verify-error-msg');
+    if (errEl) { errEl.style.display = 'block'; errEl.textContent = e.message; }
+    if (btn) { btn.disabled = false; btn.textContent = 'Start verification'; }
   }
 }
 
