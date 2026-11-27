@@ -357,6 +357,32 @@ tr.clickable:hover td { background: var(--bg-hover); cursor: pointer; }
   font-size: 13px; margin-bottom: 20px; border: 1px solid var(--border);
   background: var(--bg-card); padding: 5px 12px; border-radius: var(--r); }
 .back-btn:hover { color: var(--fg); background: var(--bg-hover); text-decoration: none; }
+/* ================================================================
+   Modal dialog
+   ================================================================ */
+.modal-overlay {
+  position: fixed; inset: 0; z-index: 100;
+  background: rgba(0,0,0,.45); backdrop-filter: blur(2px);
+  display: flex; align-items: center; justify-content: center;
+}
+.modal {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--r2); padding: 28px 28px 24px;
+  min-width: 360px; max-width: 480px; width: 90%;
+  box-shadow: 0 8px 32px rgba(0,0,0,.18);
+}
+.modal h3 { font-size: 16px; font-weight: 700; margin-bottom: 10px; }
+.modal p  { font-size: 13px; color: var(--fg2); line-height: 1.6; white-space: pre-wrap; }
+.modal pre {
+  font-family: var(--mono); font-size: 12px; background: var(--bg);
+  border: 1px solid var(--border); border-radius: var(--r);
+  padding: 10px 12px; margin: 12px 0 0; overflow-x: auto;
+  color: var(--fg2); line-height: 1.6;
+}
+.modal-actions {
+  display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;
+}
+
 input[type=text], input[type=number] {
   border: 1px solid var(--border); border-radius: var(--r); padding: 7px 10px;
   font-size: 13px; width: 100%; background: var(--bg); color: var(--fg);
@@ -588,6 +614,48 @@ window.addEventListener('DOMContentLoaded', async () => {
 });
 
 // ===================================================================
+// Modal dialog (replaces native confirm())
+// ===================================================================
+function showModal({ title, body, pre, confirmLabel = 'Confirm', danger = false }) {
+  return new Promise(resolve => {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+      <div class="modal" role="dialog" aria-modal="true">
+        <h3>${escHtml(title)}</h3>
+        ${body ? `<p>${escHtml(body)}</p>` : ''}
+        ${pre  ? `<pre>${escHtml(pre)}</pre>` : ''}
+        <div class="modal-actions">
+          <button class="btn btn-ghost" id="modal-cancel">Cancel</button>
+          <button class="btn ${danger ? 'btn-secondary' : 'btn-primary'}"
+            id="modal-confirm"
+            style="${danger ? 'border-color:var(--fail);color:var(--fail)' : ''}">
+            ${escHtml(confirmLabel)}
+          </button>
+        </div>
+      </div>`;
+
+    document.body.appendChild(overlay);
+
+    const cleanup = (result) => {
+      overlay.remove();
+      resolve(result);
+    };
+
+    overlay.querySelector('#modal-confirm').addEventListener('click', () => cleanup(true));
+    overlay.querySelector('#modal-cancel').addEventListener('click',  () => cleanup(false));
+    // Click outside the modal box cancels
+    overlay.addEventListener('click', e => { if (e.target === overlay) cleanup(false); });
+    // Escape key cancels
+    const onKey = e => { if (e.key === 'Escape') { cleanup(false); document.removeEventListener('keydown', onKey); } };
+    document.addEventListener('keydown', onKey);
+
+    // Focus the confirm button
+    overlay.querySelector('#modal-confirm').focus();
+  });
+}
+
+// ===================================================================
 // TRAIN
 // ===================================================================
 let _trainPollTimer = null;
@@ -709,12 +777,18 @@ function collectParams() {
 
 async function confirmTrain() {
   const params = collectParams();
-  const paramsPreview = Object.entries(params)
-    .map(([k, v]) => `  ${k}: ${v}`).join('\n');
-  const msg = Object.keys(params).length
-    ? `Start training with:\n\n${paramsPreview}\n\nThis will overwrite params.yaml.`
-    : 'Start training now?';
-  if (!confirm(msg)) return;
+  const paramsPreview = Object.keys(params).length
+    ? Object.entries(params).map(([k, v]) => `${k}: ${v}`).join('\n')
+    : null;
+  const confirmed = await showModal({
+    title: 'Start training',
+    body: paramsPreview
+      ? 'These values will be saved to params.yaml before training.'
+      : 'Start a new training run with the current params.yaml?',
+    pre: paramsPreview,
+    confirmLabel: 'Start training',
+  });
+  if (!confirmed) return;
 
   const btn = $('#start-train-btn');
   if (btn) { btn.disabled = true; btn.textContent = 'Starting…'; }
@@ -740,7 +814,13 @@ async function confirmTrain() {
 }
 
 async function cancelTrain() {
-  if (!confirm('Cancel the running training job?')) return;
+  const confirmed = await showModal({
+    title: 'Cancel training',
+    body: 'The run will be marked as failed. This cannot be undone.',
+    confirmLabel: 'Cancel training',
+    danger: true,
+  });
+  if (!confirmed) return;
   try {
     await fetch('/api/train', { method: 'DELETE' });
     const status = await api('/api/train/status');
