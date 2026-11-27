@@ -181,7 +181,9 @@ The `/predict` endpoint uses `Request` as its parameter type to retain manual co
 **`init` accepts any dot-prefixed entry, not a named whitelist.**
 The original check used `_SAFE = {".venv", ".git", ".DS_Store"}` and blocked any other hidden entry. Any real project directory (with `.python-version`, `.mypy_cache`, etc.) would fail even before running `mlt init`. The rule was simplified to `name.startswith(".")`: hidden entries coexist, visible entries signal an occupied project directory.
 
-## Implementation decisions (Web UI — v0.3.0)
+## Implementation decisions (Web UI — v0.3.0, experimental)
+
+> The Web UI has no automated test coverage and is considered experimental. The decisions below apply to its current implementation.
 
 **FastAPI SPA with hash routing, single HTML file.**
 The UI is a single `index.html` served by the same FastAPI app that exposes the JSON API. Navigation is hash-based (`#/train`, `#/verify/<id>`) so the server never needs to handle frontend routes. Alternative: a separate frontend build (Vite/React) — rejected because it adds a build step and a second process to a local-only tool that already has FastAPI as a dependency.
@@ -249,7 +251,7 @@ The MVP delivers the full local workflow; what follows was left out by choice.
 
 **Out of scope:** authentication, data versioning, rollback and A/B, monitoring and drift, GPU, distributed training, CPU and memory limits, old run cleanup, and API route versioning.
 
-**Delivered as v0.3.0 (was originally out of scope):** local Web UI (`mlt ui`) — read-only views (home, runs, diff) plus train, serve, and verify with live progress. The core/CLI contract was not changed; the UI calls the same `mlt.core` functions used by the CLI.
+**Delivered as v0.3.0 (was originally out of scope):** local Web UI (`mlt ui`, experimental) — read-only views (home, runs, diff) plus train, serve, and verify with live progress. The core/CLI contract was not changed; the UI calls the same `mlt.core` functions used by the CLI. No automated tests; manual verification only.
 
 **Evolution, in the order I would do it:**
 

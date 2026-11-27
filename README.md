@@ -335,7 +335,7 @@ Supported types: `int`, `float`, `str`. Optional constraints: `min`, `max`, `all
 | `mlt diff <a> <b>` | What changed between two runs |
 | `mlt verify <run_id>` | Retrain from the run's own snapshot and compare metrics |
 | `mlt serve <run_id>` | Start the inference API; `--port 8000`, `--host 127.0.0.1` |
-| `mlt ui [folder]` | Open the local Web UI for the project (defaults to current directory) |
+| `mlt ui [folder]` | Open the local Web UI for the project — **experimental** (see below) |
 
 **Run ID shortcuts:** every command that takes a `run_id` also accepts `latest` and any unique prefix (like `git`).
 
@@ -362,6 +362,37 @@ Supported types: `int`, `float`, `str`. Optional constraints: `min`, `max`, `all
 | `GET /docs` | Swagger UI with interactive example |
 
 Error codes: 400 (malformed JSON), 413 (batch > 1000), 422 (schema violation with field path), 500 (exception in `predict`).
+
+---
+
+## Web UI (experimental)
+
+> **Experimental.** The Web UI has no automated test coverage. It is a visual companion to the CLI — useful for exploration and demos, but not recommended as the primary interface for production workflows. Bugs are possible.
+
+`mlt ui` starts a local web server and opens a browser-based interface for the project. It covers the same operations as the CLI: browsing runs, training, serving, verifying reproducibility, comparing runs, and creating new projects.
+
+```bash
+mlt ui .          # open the UI for the current project
+mlt ui ~/demo     # open the UI for a specific project
+```
+
+The server starts on `http://127.0.0.1:4000` by default (`--port` to change). Press `Ctrl+C` to stop it.
+
+### What the UI covers
+
+| Feature | CLI equivalent |
+|---------|---------------|
+| Browse runs, run detail, compare | `mlt runs list/show`, `mlt diff` |
+| Start, cancel, and monitor training with step-by-step progress | `mlt train` |
+| Start and stop the inference service | `mlt serve` |
+| Verify reproducibility with live progress | `mlt verify` |
+| Create a new project from a template | `mlt init` |
+
+### Known limitations
+
+- **One project per server instance.** `mlt ui` binds to a single project directory at startup; opening a different project requires restarting.
+- **One operation at a time.** Only one training job and one verification can run simultaneously via the UI (same constraint as the CLI, enforced explicitly).
+- **No automated tests.** The UI is tested manually. Frontend regressions (broken polling, stale state after navigation) may occur.
 
 ---
 
