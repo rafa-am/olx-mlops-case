@@ -36,6 +36,7 @@ class VenvRunner(Runner):
         self._python_exe = sys.executable
         self._env_hash_val: str | None = None
         self._lock_file = None
+        self._current_proc: subprocess.Popen | None = None  # for terminate()
 
     # ------------------------------------------------------------------
     # Runner interface
@@ -145,6 +146,16 @@ class VenvRunner(Runner):
         except subprocess.TimeoutExpired:
             return _TIMEOUT_EXIT_CODE, "deep check timed out"
 
+    def terminate(self) -> None:
+        """Terminate the current subprocess if one is running."""
+        proc = self._current_proc
+        if proc is not None and proc.poll() is None:
+            proc.terminate()
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
@@ -153,11 +164,22 @@ class VenvRunner(Runner):
         from mlt.core.errors import MltEnvironmentError
 
         def _run(cmd: list[str]) -> subprocess.CompletedProcess:
-            """Run *cmd*, writing output to log_path when provided."""
+            """Run *cmd* via Popen (stores ref for terminate()); write to log_path when provided."""
             if log_path is None:
-                return subprocess.run(cmd, capture_output=True, text=True)
-            with open(log_path, "ab") as lf:
-                return subprocess.run(cmd, stdout=lf, stderr=subprocess.STDOUT)
+                proc = subprocess.Popen(
+                    cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
+                )
+                self._current_proc = proc
+                stdout, _ = proc.communicate()
+                return subprocess.CompletedProcess(cmd, proc.returncode, stdout=stdout, stderr="")
+            lf = open(log_path, "ab")  # noqa: WPS515 — kept open for the duration of the subprocess
+            try:
+                proc = subprocess.Popen(cmd, stdout=lf, stderr=subprocess.STDOUT)
+                self._current_proc = proc
+                proc.wait()
+            finally:
+                lf.close()
+            return subprocess.CompletedProcess(cmd, proc.returncode)
 
         def _error_text() -> str:
             """Return tail of log_path, or empty string when not writing to file."""

@@ -62,6 +62,7 @@ def train(
     force: bool = False,
     env: Mapping[str, str] | None = None,
     on_slow_build: "Callable[[], None] | None" = None,
+    on_runner_created: "Callable | None" = None,
     verification_of: str | None = None,
     _store_project_dir: Path | None = None,
 ) -> str:
@@ -139,6 +140,8 @@ def train(
 
     req_txt = project_dir / "requirements.txt"
     runner_instance = _create_runner(runner, req_txt, python_minor)
+    if on_runner_created:
+        on_runner_created(runner_instance)
     lock_str = runner_instance.build_env(
         on_slow_build=on_slow_build,
         log_path=build_log_path,

@@ -57,6 +57,14 @@ class Runner(ABC):
         Writes stdout + stderr to ``run_dir/train.log``.
         """
 
+    def terminate(self) -> None:
+        """Best-effort termination of the current subprocess (if any).
+
+        Called when the caller wants to cancel an in-progress build or
+        training.  Default is a no-op; runners that hold a Popen reference
+        override this.
+        """
+
     @abstractmethod
     def run_deep_check(
         self,

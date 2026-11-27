@@ -65,6 +65,7 @@ class DockerRunner(Runner):
         self._requirements_txt = requirements_txt
         self._python_minor = python_minor
         self._env_hash_val: str | None = None
+        self._current_proc: subprocess.Popen | None = None  # for terminate()
 
     # ------------------------------------------------------------------
     # Runner interface
@@ -167,6 +168,16 @@ class DockerRunner(Runner):
         except subprocess.TimeoutExpired:
             return _TIMEOUT_EXIT_CODE, "deep check timed out"
 
+    def terminate(self) -> None:
+        """Terminate the current subprocess if one is running."""
+        proc = self._current_proc
+        if proc is not None and proc.poll() is None:
+            proc.terminate()
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
@@ -197,28 +208,26 @@ class DockerRunner(Runner):
                 _make_dockerfile(self._python_minor), encoding="utf-8"
             )
 
+            cmd = ["docker", "build", "-t", tag, "."]
             if log_path is None:
-                result = subprocess.run(
-                    ["docker", "build", "-t", tag, "."],
-                    capture_output=True,
-                    text=True,
-                    cwd=ctx,
+                proc = subprocess.Popen(
+                    cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, cwd=ctx,
                 )
-                error_detail = (result.stderr + result.stdout)[-1000:]
+                self._current_proc = proc
+                stdout, _ = proc.communicate()
+                error_detail = stdout[-1000:]
             else:
-                with open(log_path, "ab") as lf:
-                    result = subprocess.run(
-                        ["docker", "build", "-t", tag, "."],
-                        stdout=lf,
-                        stderr=subprocess.STDOUT,
-                        cwd=ctx,
-                    )
-                if log_path.exists():
-                    error_detail = "\n".join(
-                        log_path.read_text(errors="replace").splitlines()[-30:]
-                    )
-                else:
-                    error_detail = ""
+                lf = open(log_path, "ab")  # noqa: WPS515 — kept open for the subprocess duration
+                try:
+                    proc = subprocess.Popen(cmd, stdout=lf, stderr=subprocess.STDOUT, cwd=ctx)
+                    self._current_proc = proc
+                    proc.wait()
+                finally:
+                    lf.close()
+                error_detail = (
+                    "\n".join(log_path.read_text(errors="replace").splitlines()[-30:])
+                    if log_path.exists() else ""
+                )
 
-        if result.returncode != 0:
+        if proc.returncode != 0:
             raise MltEnvironmentError(f"docker build failed:\n{error_detail}")

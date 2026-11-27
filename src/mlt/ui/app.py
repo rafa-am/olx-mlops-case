@@ -44,6 +44,7 @@ class _TrainState:
         self.error: str | None = None
         self._thread: threading.Thread | None = None
         self._cancel_event = threading.Event()
+        self._runner = None  # set once train() creates the runner
 
     def start(
         self,
@@ -74,6 +75,7 @@ class _TrainState:
                     timeout=600,
                     force=False,
                     env=env,
+                    on_runner_created=lambda r: setattr(self, "_runner", r),
                 )
                 with self._lock:
                     self.run_id = run_id
@@ -87,8 +89,11 @@ class _TrainState:
         self._thread.start()
 
     def cancel(self) -> None:
-        """Mark cancellation; the thread must check _cancel_event (best-effort)."""
+        """Terminate the current subprocess and mark cancellation."""
         self._cancel_event.set()
+        runner = self._runner
+        if runner is not None:
+            runner.terminate()
 
     def snapshot(self) -> dict:
         with self._lock:
