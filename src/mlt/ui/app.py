@@ -12,9 +12,10 @@ import dataclasses
 import importlib.metadata
 import subprocess
 import sys
+import threading
 from pathlib import Path
-
-from fastapi import FastAPI, HTTPException
+import yaml
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
 
 from mlt.core.diff import diff_runs_by_id
@@ -31,6 +32,61 @@ def _docker_status() -> str:
         return "unavailable"
 
 
+class _TrainState:
+    """Thread-safe state for a single in-progress training job."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self.run_id: str | None = None
+        self.status: str = "idle"   # idle | running | done | failed
+        self.error: str | None = None
+        self._thread: threading.Thread | None = None
+        self._cancel_event = threading.Event()
+
+    def start(self, project_dir: Path, params: dict[str, Any], runner: str) -> None:
+        with self._lock:
+            if self.status == "running":
+                raise RuntimeError("A training job is already running.")
+            self.run_id = None
+            self.error = None
+            self.status = "running"
+            self._cancel_event.clear()
+
+        def _run() -> None:
+            try:
+                from mlt.core.trainer import train
+
+                run_id = train(
+                    project_dir=project_dir,
+                    data_dir=project_dir / "data",
+                    runner=runner,
+                    timeout=600,
+                    force=False,
+                )
+                with self._lock:
+                    self.run_id = run_id
+                    self.status = "done"
+            except Exception as exc:
+                with self._lock:
+                    self.error = str(exc)
+                    self.status = "failed"
+
+        self._thread = threading.Thread(target=_run, daemon=True)
+        self._thread.start()
+
+    def cancel(self) -> None:
+        """Mark cancellation; the thread must check _cancel_event (best-effort)."""
+        self._cancel_event.set()
+
+    def snapshot(self) -> dict:
+        with self._lock:
+            return {
+                "status": self.status,
+                "run_id": self.run_id,
+                "error":  self.error,
+            }
+
+
 def _not_found(exc: MltError) -> HTTPException:
     return HTTPException(status_code=404, detail=str(exc))
 
@@ -38,6 +94,7 @@ def _not_found(exc: MltError) -> HTTPException:
 def create_ui_app(project_dir: Path) -> FastAPI:
     """Return a FastAPI app bound to *project_dir*."""
     app = FastAPI(title="mlt UI", docs_url=None, redoc_url=None)
+    _train = _TrainState()
 
     # ------------------------------------------------------------------
     # API — JSON endpoints consumed by the SPA
@@ -127,6 +184,94 @@ def create_ui_app(project_dir: Path) -> FastAPI:
             return {"lines": []}
         lines = log_path.read_text(encoding="utf-8", errors="replace").splitlines()
         return {"lines": lines[-tail:]}
+
+    # ------------------------------------------------------------------
+    # Params
+    # ------------------------------------------------------------------
+
+    def _read_params() -> dict:
+        p = project_dir / "params.yaml"
+        if not p.exists():
+            return {}
+        raw = yaml.safe_load(p.read_text(encoding="utf-8"))
+        return raw if isinstance(raw, dict) else {}
+
+    @app.get("/api/project/params")
+    def get_params():
+        """Return the current params.yaml as a key-value dict."""
+        return _read_params()
+
+    @app.put("/api/project/params")
+    async def put_params(request: Request):
+        """Overwrite params.yaml with the provided key-value dict."""
+        body = await request.json()
+        if not isinstance(body, dict):
+            raise HTTPException(status_code=422, detail="Body must be a JSON object.")
+        p = project_dir / "params.yaml"
+        p.write_text(yaml.dump(body, default_flow_style=False), encoding="utf-8")
+        return {"ok": True}
+
+    # ------------------------------------------------------------------
+    # Train (async)
+    # ------------------------------------------------------------------
+
+    @app.post("/api/train")
+    async def start_train(request: Request):
+        """Save params then launch training in a background thread."""
+        body = await request.json()
+        params  = body.get("params", {})
+        runner  = body.get("runner", "auto")
+
+        # Write params.yaml before training.
+        p = project_dir / "params.yaml"
+        p.write_text(yaml.dump(params, default_flow_style=False), encoding="utf-8")
+
+        try:
+            _train.start(project_dir, params, runner)
+        except RuntimeError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        return {"started": True}
+
+    @app.get("/api/train/status")
+    def train_status():
+        """Return the current training state."""
+        snap = _train.snapshot()
+        # Reconcile: if the thread died unexpectedly while still marked running,
+        # check whether the manifest already shows a terminal status.
+        if snap["status"] == "running" and snap["run_id"]:
+            try:
+                m = describe_run(project_dir, snap["run_id"])
+                if m.status in ("succeeded", "failed", "cancelled"):
+                    with _train._lock:
+                        _train.status = "done" if m.status == "succeeded" else "failed"
+                    snap = _train.snapshot()
+            except MltError:
+                pass
+        return snap
+
+    @app.delete("/api/train")
+    def cancel_train():
+        """Request cancellation of the current training job (best-effort)."""
+        snap = _train.snapshot()
+        if snap["status"] != "running":
+            raise HTTPException(status_code=409, detail="No training job in progress.")
+        _train.cancel()
+        # Mark the run as failed in the store if we have a run_id.
+        if snap["run_id"]:
+            try:
+                from mlt.runstore.store import RunStore
+
+                store = RunStore(project_dir)
+                m = store.get_run(snap["run_id"])
+                if m.status == "running":
+                    m.mark_failed("interrupted by user (UI cancel)")
+                    m.write(store.run_dir(m.run_id) / "manifest.json")
+            except Exception:
+                pass
+        with _train._lock:
+            _train.status = "failed"
+            _train.error  = "Cancelled by user."
+        return {"cancelled": True}
 
     @app.get("/api/diff/{run_id_a}/{run_id_b}")
     def diff(run_id_a: str, run_id_b: str):

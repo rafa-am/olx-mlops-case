@@ -384,6 +384,7 @@ input[type=checkbox] { width: 14px; height: 14px; cursor: pointer; accent-color:
 
   <nav id="sidebar-nav">
     <a href="#/" data-page="home">Home</a>
+    <a href="#/train" data-page="train">Train</a>
     <a href="#/runs" data-page="runs">Runs</a>
     <a href="#/compare" data-page="compare">Compare</a>
   </nav>
@@ -527,6 +528,9 @@ async function route() {
   if (path === '/' || path === '') {
     setActivePage('home');
     renderHome();
+  } else if (path === '/train') {
+    setActivePage('train');
+    renderTrain();
   } else if (path === '/runs') {
     setActivePage('runs');
     renderRuns();
@@ -582,6 +586,183 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   route();
 });
+
+// ===================================================================
+// TRAIN
+// ===================================================================
+let _trainPollTimer = null;
+
+async function renderTrain() {
+  $('#main').innerHTML = '<div id="loading-state">Loading…</div>';
+
+  // Load settings + params + current train status in parallel
+  const [settingsRes, paramsRes, statusRes] = await Promise.allSettled([
+    S.settings ? Promise.resolve(S.settings) : api('/api/project/settings'),
+    api('/api/project/params'),
+    api('/api/train/status'),
+  ]);
+
+  if (settingsRes.status === 'fulfilled') S.settings = settingsRes.value;
+  const params = paramsRes.status === 'fulfilled' ? paramsRes.value : {};
+  const trainStatus = statusRes.status === 'fulfilled' ? statusRes.value : { status: 'idle' };
+
+  buildTrainView(params, trainStatus);
+}
+
+function buildTrainView(params, trainStatus) {
+  clearTrainPoll();
+  const running = trainStatus.status === 'running';
+
+  // Build editable param rows
+  const paramRows = Object.entries(params).length
+    ? Object.entries(params).map(([k, v]) => `
+        <tr>
+          <td class="k">${escHtml(k)}</td>
+          <td><input type="text" class="param-input" data-key="${escHtml(k)}"
+            value="${escHtml(String(v))}" ${running ? 'disabled' : ''}
+            style="width:100%;font-family:var(--mono);font-size:12px"></td>
+        </tr>`).join('')
+    : `<tr><td colspan="2" style="color:var(--fg3);padding:8px 0">No params.yaml found in project.</td></tr>`;
+
+  const settingsHtml = S.settings ? `
+    <table class="kv" style="margin-bottom:0">
+      ${kvRows([
+        ['python', `${S.settings.python_requested} (${S.settings.python_source})`],
+        ['runner', S.settings.runner_display],
+        ['seed',   `${S.settings.seed} (${S.settings.seed_source})`],
+      ])}
+    </table>` : '<p style="color:var(--fg3)">—</p>';
+
+  // Status / progress area
+  let statusHtml = '';
+  if (trainStatus.status === 'running') {
+    statusHtml = `
+      <div class="card" id="train-status-card">
+        <div class="card-title">Training in progress…</div>
+        <p style="color:var(--fg3);font-size:13px;margin-bottom:12px">
+          Polling every 5 s — <span id="train-run-id">${trainStatus.run_id ? escHtml(trainStatus.run_id) : 'waiting for run_id…'}</span>
+        </p>
+        <button class="btn btn-secondary" onclick="cancelTrain()" style="border-color:var(--fail);color:var(--fail)">
+          Cancel training
+        </button>
+      </div>`;
+  } else if (trainStatus.status === 'done' && trainStatus.run_id) {
+    statusHtml = `
+      <div class="card" style="border-color:var(--success)">
+        <div class="card-title" style="color:var(--success)">Training completed</div>
+        <p style="font-size:13px;margin-bottom:12px">
+          <a href="#/run/${trainStatus.run_id}" class="mono">${escHtml(trainStatus.run_id)}</a>
+        </p>
+        <a href="#/run/${trainStatus.run_id}" class="btn btn-primary">View run details</a>
+      </div>`;
+  } else if (trainStatus.status === 'failed') {
+    statusHtml = `
+      <div class="card" style="border-color:var(--fail)">
+        <div class="card-title" style="color:var(--fail)">Training failed</div>
+        <p style="font-size:13px;color:var(--fg2)">${escHtml(trainStatus.error || 'Unknown error')}</p>
+        ${trainStatus.run_id ? `<a href="#/run/${trainStatus.run_id}" class="btn btn-secondary" style="margin-top:10px">View run details</a>` : ''}
+      </div>`;
+  }
+
+  $('#main').innerHTML = `
+    <h1 class="page-title">Train</h1>
+    <p class="page-sub">Equivalent to <code>mlt train .</code></p>
+
+    <div class="detail-grid" style="margin-bottom:16px">
+      <div class="card" style="margin-bottom:0">
+        <div class="card-title">Effective settings</div>
+        <p style="font-size:12px;color:var(--fg3);margin-bottom:10px">Read-only — set via <code>.python-version</code>, <code>params.yaml</code> or CLI flags.</p>
+        ${settingsHtml}
+      </div>
+      <div class="card" style="margin-bottom:0">
+        <div class="card-title">Parameters <span style="font-size:11px;font-weight:400;color:var(--fg3)">params.yaml</span></div>
+        <p style="font-size:12px;color:var(--fg3);margin-bottom:10px">
+          These values will be saved to <code>params.yaml</code> before training.
+        </p>
+        <table class="kv" id="params-table">${paramRows}</table>
+      </div>
+    </div>
+
+    ${statusHtml}
+
+    ${!running ? `
+    <div style="display:flex;gap:10px;align-items:center">
+      <button class="btn btn-primary" id="start-train-btn" onclick="confirmTrain()">
+        Start training
+      </button>
+      ${trainStatus.status !== 'idle' ? `<a href="#/runs" class="btn btn-ghost">View all runs</a>` : ''}
+    </div>` : ''}`;
+
+  if (running) startTrainPoll();
+}
+
+function collectParams() {
+  const result = {};
+  $$('.param-input').forEach(input => {
+    const raw = input.value.trim();
+    // Coerce to number if possible, else keep string
+    const num = Number(raw);
+    result[input.dataset.key] = raw === '' ? '' : (isNaN(num) || raw === '' ? raw : num);
+  });
+  return result;
+}
+
+async function confirmTrain() {
+  const params = collectParams();
+  const paramsPreview = Object.entries(params)
+    .map(([k, v]) => `  ${k}: ${v}`).join('\n');
+  const msg = Object.keys(params).length
+    ? `Start training with:\n\n${paramsPreview}\n\nThis will overwrite params.yaml.`
+    : 'Start training now?';
+  if (!confirm(msg)) return;
+
+  const btn = $('#start-train-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Starting…'; }
+
+  try {
+    await fetch('/api/train', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ params, runner: S.settings?.runner || 'auto' }),
+    });
+    // Re-render immediately so the status card appears
+    const status = await api('/api/train/status');
+    buildTrainView(params, status);
+  } catch (e) {
+    alert(`Failed to start training: ${e.message}`);
+    if (btn) { btn.disabled = false; btn.textContent = 'Start training'; }
+  }
+}
+
+async function cancelTrain() {
+  if (!confirm('Cancel the running training job?')) return;
+  try {
+    await fetch('/api/train', { method: 'DELETE' });
+    const status = await api('/api/train/status');
+    const params = await api('/api/project/params');
+    buildTrainView(params, status);
+  } catch (e) {
+    alert(`Cancel failed: ${e.message}`);
+  }
+}
+
+function startTrainPoll() {
+  _trainPollTimer = setInterval(async () => {
+    try {
+      const status = await api('/api/train/status');
+      const runIdEl = $('#train-run-id');
+      if (runIdEl && status.run_id) runIdEl.textContent = status.run_id;
+      if (status.status !== 'running') {
+        const params = await api('/api/project/params');
+        buildTrainView(params, status);
+      }
+    } catch (_) {}
+  }, 5000);
+}
+
+function clearTrainPoll() {
+  if (_trainPollTimer) { clearInterval(_trainPollTimer); _trainPollTimer = null; }
+}
 
 // ===================================================================
 // HOME
