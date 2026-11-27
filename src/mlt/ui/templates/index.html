@@ -1272,6 +1272,11 @@ async function confirmStopServe() {
     danger: true,
   });
   if (!ok) return;
+
+  // Show immediate feedback while the DELETE waits for the process to exit.
+  const stopBtn = $('button[onclick="confirmStopServe()"]');
+  if (stopBtn) { stopBtn.disabled = true; stopBtn.textContent = 'Stopping…'; }
+
   try { await fetch('/api/serve', { method: 'DELETE' }); } catch (_) {}
   renderServe();
 }
