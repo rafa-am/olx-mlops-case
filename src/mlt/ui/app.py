@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import dataclasses
 import importlib.metadata
+import os
 import subprocess
 import sys
 import threading
@@ -43,7 +44,14 @@ class _TrainState:
         self._thread: threading.Thread | None = None
         self._cancel_event = threading.Event()
 
-    def start(self, project_dir: Path, params: dict[str, Any], runner: str) -> None:
+    def start(
+        self,
+        project_dir: Path,
+        runner: str,
+        python: str | None,
+        seed: int | None,
+        env: dict,
+    ) -> None:
         with self._lock:
             if self.status == "running":
                 raise RuntimeError("A training job is already running.")
@@ -60,8 +68,11 @@ class _TrainState:
                     project_dir=project_dir,
                     data_dir=project_dir / "data",
                     runner=runner,
+                    python=python,
+                    seed=seed,
                     timeout=600,
                     force=False,
+                    env=env,
                 )
                 with self._lock:
                     self.run_id = run_id
@@ -223,16 +234,24 @@ def create_ui_app(project_dir: Path) -> FastAPI:
     @app.post("/api/train")
     async def start_train(request: Request):
         """Save params then launch training in a background thread."""
-        body = await request.json()
-        params  = body.get("params", {})
-        runner  = body.get("runner", "auto")
+        body   = await request.json()
+        params = body.get("params", {})
+        runner = body.get("runner", "auto")
+        python = body.get("python") or None   # e.g. "3.11", None → use default
+        seed   = body.get("seed")             # int or None
 
-        # Write params.yaml before training.
+        # Write params.yaml before training (matches CLI behaviour).
         p = project_dir / "params.yaml"
         p.write_text(yaml.dump(params, default_flow_style=False), encoding="utf-8")
 
         try:
-            _train.start(project_dir, params, runner)
+            _train.start(
+                project_dir=project_dir,
+                runner=runner,
+                python=python,
+                seed=int(seed) if seed is not None else None,
+                env=dict(os.environ),
+            )
         except RuntimeError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         return {"started": True}

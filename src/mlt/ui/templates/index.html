@@ -723,7 +723,12 @@ async function confirmTrain() {
     await fetch('/api/train', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ params, runner: S.settings?.runner || 'auto' }),
+      body: JSON.stringify({
+      params,
+      runner: S.settings?.runner || 'auto',
+      python: S.settings?.python_requested || null,
+      seed:   S.settings?.seed ?? null,
+    }),
     });
     // Re-render immediately so the status card appears
     const status = await api('/api/train/status');
