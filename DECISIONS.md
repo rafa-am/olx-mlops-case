@@ -181,6 +181,26 @@ The `/predict` endpoint uses `Request` as its parameter type to retain manual co
 **`init` accepts any dot-prefixed entry, not a named whitelist.**
 The original check used `_SAFE = {".venv", ".git", ".DS_Store"}` and blocked any other hidden entry. Any real project directory (with `.python-version`, `.mypy_cache`, etc.) would fail even before running `mlt init`. The rule was simplified to `name.startswith(".")`: hidden entries coexist, visible entries signal an occupied project directory.
 
+## Implementation decisions (Web UI — v0.3.0)
+
+**FastAPI SPA with hash routing, single HTML file.**
+The UI is a single `index.html` served by the same FastAPI app that exposes the JSON API. Navigation is hash-based (`#/train`, `#/verify/<id>`) so the server never needs to handle frontend routes. Alternative: a separate frontend build (Vite/React) — rejected because it adds a build step and a second process to a local-only tool that already has FastAPI as a dependency.
+
+**Thread-safe state objects (`_TrainState`, `_VerifyState`, `_ServeState`) instead of shared dicts.**
+Each long-running operation runs in a background thread and writes to a small state object behind a `threading.Lock`. The API endpoints only read snapshots (`snapshot() → dict`). The alternative (asyncio) would have required either running blocking `train()` in a thread pool anyway, or making the entire core async — not worth it for a local-only UI with one user.
+
+**`on_step` and `on_run_created` callbacks in `trainer.train()`.**
+The UI needs to update the progress display incrementally: step names as they start, and the new run_id as soon as the run record exists (before training completes). Both are injected as optional callbacks with `None` defaults, so the CLI and tests are unaffected. The `on_run_created` callback in particular lets the verify page switch from `build.log` to `train.log` as soon as the run record is created, without polling the store.
+
+**`/api/system` as single source of truth for UI defaults.**
+Runner names, default port, default timeout, and step list are module-level constants in `app.py`, exported via `GET /api/system`. The frontend never hardcodes these values. Any future addition to `_TRAIN_STEPS` requires a matching `_step()` call in `trainer.py` (enforced by a cross-reference comment in both files) but is otherwise automatic in the UI.
+
+**Verify build log reads from the snapshot directory, not the project root.**
+`verify_run()` calls `train()` with `project_dir=run_dir/code/`, so `build.log` is written to `run_dir/code/.mlt/build.log`, not to the live project's `.mlt/`. A dedicated `GET /api/verify/log` endpoint reads from the right path; the generic `GET /api/build/log` is left for the train flow only.
+
+**Dismiss pattern for terminal states (train and verify).**
+A `POST /api/<op>/dismiss` endpoint resets the in-memory state to idle. Without it, a cancelled or failed card persists across page navigations because the state is in memory, not derived from the run store. The alternative (derive from the store on every render) would re-show cancelled runs every time the user navigates back, which is unexpected.
+
 ## Ambiguities and interpretations
 
 When the problem statement left something open, I chose the simplest interpretation that keeps the tool useful end-to-end.
