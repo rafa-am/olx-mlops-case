@@ -1798,14 +1798,16 @@ function buildVerifyView(orig, snap) {
       </div>`;
   }
 
+  // When idle: two-column grid (compact). When active: stacked full-width.
+  const layout = snap.status === 'idle'
+    ? `<div class="detail-grid">${origCard}${statusCard}</div>`
+    : `${origCard}<div style="margin-top:16px">${statusCard}</div>`;
+
   $('#main').innerHTML = `
     <a href="#/run/${escHtml(orig.run_id)}" class="back-btn">← Run detail</a>
     <h1 class="page-title">Verify</h1>
     <p class="page-sub">Re-train from the run's snapshot and check reproducibility.</p>
-    <div class="detail-grid">
-      ${origCard}
-      ${statusCard}
-    </div>`;
+    ${layout}`;
 
   if (snap.status === 'running') startVerifyPoll(orig);
 }
