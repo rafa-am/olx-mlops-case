@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+from pathlib import Path
+
 from mlt.model.sklearn import SklearnModel
 
 
@@ -9,7 +13,7 @@ class Model(SklearnModel):
     below for clarity — override them only if you need custom behaviour.
     """
 
-    def fit(self, data_dir, params):
+    def fit(self, data_dir: Path, params: dict) -> dict[str, float]:
         import pandas as pd
         from sklearn.ensemble import RandomForestClassifier
         from sklearn.model_selection import train_test_split
@@ -33,7 +37,7 @@ class Model(SklearnModel):
         # Return metrics — only numbers allowed.
         return {"accuracy": float(self.model.score(X_te, y_te))}
 
-    def predict(self, inputs):
+    def predict(self, inputs: list[dict]) -> list:
         """Return one prediction per input record.
 
         inputs is a list of dicts with feature names as keys::
@@ -47,7 +51,7 @@ class Model(SklearnModel):
         """
         return super().predict(inputs)
 
-    def save(self, path):
+    def save(self, path: Path) -> None:
         """Persist the model to a directory.
 
         path is a pathlib.Path to a local directory created by mlt.
@@ -57,7 +61,7 @@ class Model(SklearnModel):
         super().save(path)
 
     @classmethod
-    def load(cls, path):
+    def load(cls, path: Path) -> "Model":
         """Restore the model from a directory.
 
         path is a pathlib.Path to the same directory passed to save().

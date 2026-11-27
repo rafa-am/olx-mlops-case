@@ -73,11 +73,15 @@ One page that tells the scientist what is expected of them:
 ### Minimal example (this is the `model.py` of the `iris` template)
 
 ```python
+from __future__ import annotations
+
+from pathlib import Path
+
 from mlt.model.sklearn import SklearnModel
 
 
 class Model(SklearnModel):
-    def fit(self, data_dir, params):
+    def fit(self, data_dir: Path, params: dict) -> dict[str, float]:
         import pandas as pd
         from sklearn.ensemble import RandomForestClassifier
         from sklearn.model_selection import train_test_split
@@ -94,18 +98,18 @@ class Model(SklearnModel):
         ).fit(X_tr, y_tr)
         return {"accuracy": float(self.model.score(X_te, y_te))}
 
-    def predict(self, inputs):
+    def predict(self, inputs: list[dict]) -> list:
         # SklearnModel reorders columns to match training order and calls
         # self.model.predict(). Override for custom pre/post-processing.
         return super().predict(inputs)
 
-    def save(self, path):
+    def save(self, path: Path) -> None:
         # path is a pathlib.Path; SklearnModel saves to path/model.joblib.
         # Override if your model requires a different serialisation format.
         super().save(path)
 
     @classmethod
-    def load(cls, path):
+    def load(cls, path: Path) -> "Model":
         # path is a pathlib.Path; SklearnModel loads from path/model.joblib.
         # Override if you customised save().
         return super().load(path)

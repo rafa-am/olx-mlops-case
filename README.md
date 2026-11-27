@@ -231,11 +231,15 @@ When using `MLModel` directly, you must also implement `save(self, path)` and `l
 ### Writing `model.py`
 
 ```python
+from __future__ import annotations
+
+from pathlib import Path
+
 from mlt.model.sklearn import SklearnModel   # or: from mlt.model.base import MLModel
 
 class Model(SklearnModel):
 
-    def fit(self, data_dir, params):
+    def fit(self, data_dir: Path, params: dict) -> dict[str, float]:
         """
         data_dir: pathlib.Path — read-only folder with your training data.
         params:   dict — contents of params.yaml (empty dict if absent).
@@ -259,7 +263,7 @@ class Model(SklearnModel):
         ).fit(X_tr, y_tr)
         return {"accuracy": float(self.model.score(X_te, y_te))}
 
-    def predict(self, inputs):
+    def predict(self, inputs: list[dict]) -> list:
         """Return one prediction per input record.
 
         inputs is a list of dicts with feature names as keys::
@@ -273,7 +277,7 @@ class Model(SklearnModel):
         """
         return super().predict(inputs)
 
-    def save(self, path):
+    def save(self, path: Path) -> None:
         """Persist the model to a directory.
 
         path is a pathlib.Path to a local directory created by mlt.
@@ -283,7 +287,7 @@ class Model(SklearnModel):
         super().save(path)
 
     @classmethod
-    def load(cls, path):
+    def load(cls, path: Path) -> "Model":
         """Restore the model from a directory.
 
         path is a pathlib.Path to the same directory passed to save().
