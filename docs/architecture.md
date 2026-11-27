@@ -161,10 +161,10 @@ flowchart LR
 | Core function | Returns | Used by |
 |---|---|---|
 | `runs.list_runs` / `describe_run` | `list[Manifest]` / `Manifest` | `runs_cmd`, `ui` |
-| `diff.diff_runs` / `diff_runs_by_id` | `RunDiff` dataclass | `diff_cmd`, `ui` |
+| `diff.diff_runs_by_id` | `RunDiff` dataclass | `diff_cmd`, `ui` |
 | `verify.verify_run` | `VerifyResult` dataclass | `verify_cmd`, `ui` |
-| `trainer.train` | `run_id` (str) | `train_cmd`, `ui` (via `verify_run`) |
 | `settings.resolve_effective_settings` | `EffectiveSettings` dataclass | `train_cmd`, `ui` |
+| `reconcile.reconcile_running_runs` | `list[str]` (fixed run_ids) | `runs_cmd`, `ui` |
 | `project.open_project` | `Path` | `discovery.require_project_dir` |
 
 This boundary is enforced by `tests/test_core_isolation.py`, which asserts that none of these modules import `click`, `typer`, or `mlt.cli`.

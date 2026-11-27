@@ -380,7 +380,7 @@ Each step ends with passing tests and a commit. Record the time spent per step (
 
 - **P0 (without this there is no delivery):** contract and validation, training (Docker and venv), manifest and `RunStore`, `runs list/show`, `serve` with `/predict`, critical flow tests, README, and documents.
 - **P1:** `check` (static and `--deep`), `init` with `iris` template, `verify`, `diff`.
-- **P2 (cut first):** `--snapshot-data`, `serve --detach`, `ps`, `stop`, `logs`, `blank` template, `--json`, `runs list --status` (CLI flag). The flows for each are closed below. (Interrupted run reconciliation was implemented in `core/reconcile.py` and is called by `mlt ui` on startup; `mlt runs list` does not reconcile.)
+- **P2 (cut first):** `--snapshot-data`, `serve --detach`, `ps`, `stop`, `logs`, `blank` template, `--json`, `runs list --status` (CLI flag). The flows for each are closed below. (Interrupted run reconciliation was implemented in `core/reconcile.py`; it runs on `mlt runs list`, `mlt runs show`, and `mlt ui` startup.)
 
 What is cut goes into `DECISIONS.md` as "not done due to time constraints".
 

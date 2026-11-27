@@ -439,7 +439,6 @@ The following flows are designed but not yet implemented:
 - `blank` template: `MLModel` skeleton for non-sklearn frameworks
 - `--json` output flag on all commands
 - `runs list --status` filter
-- `kill -9` reconciliation in `mlt runs list`: a hard-killed training process leaves the run as `running`; `mlt runs list` will not auto-recover it (Ctrl+C is handled correctly; `mlt ui` reconciles on startup)
 
 ---
 
