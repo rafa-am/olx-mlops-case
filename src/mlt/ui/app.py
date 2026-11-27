@@ -523,6 +523,58 @@ def create_ui_app(project_dir: Path) -> FastAPI:
         except Exception as exc:
             raise HTTPException(status_code=502, detail=f"predict failed: {exc}") from exc
 
+    # ------------------------------------------------------------------
+    # Init (new project)
+    # ------------------------------------------------------------------
+
+    _TEMPLATE_FILES = {
+        "iris": [
+            ("model.py",           "MLModel class (SklearnModel) ready for iris"),
+            ("requirements.txt",   "model dependencies"),
+            ("params.yaml",        "hyperparameters (optional)"),
+            (".python-version",    "pinned Python version"),
+            (".gitignore",         "excludes .mlt/, data/, .venv/"),
+            ("data/iris.csv",      "sample data"),
+        ],
+    }
+
+    @app.post("/api/init")
+    async def init_project(request: Request):
+        """Create a new project from a template (equivalent to mlt init)."""
+        import shutil as _shutil
+
+        body      = await request.json()
+        directory = body.get("directory", "").strip()
+        template  = body.get("template", "iris")
+
+        if not directory:
+            raise HTTPException(status_code=422, detail="directory is required")
+        if template not in _TEMPLATE_FILES:
+            raise HTTPException(status_code=422, detail=f"unknown template '{template}'")
+
+        dest = Path(directory).expanduser().resolve()
+
+        if dest.exists() and any(not p.name.startswith(".") for p in dest.iterdir()):
+            raise HTTPException(
+                status_code=409,
+                detail=f"{dest} already exists and is not empty",
+            )
+
+        template_dir = Path(__file__).parent.parent / "templates" / template
+        dest.mkdir(parents=True, exist_ok=True)
+
+        for src in sorted(template_dir.rglob("*")):
+            if src.is_file() and "__pycache__" not in src.parts:
+                rel = src.relative_to(template_dir)
+                dst = dest / rel
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                _shutil.copy2(src, dst)
+
+        return {
+            "directory": str(dest),
+            "files": [{"name": n, "description": d} for n, d in _TEMPLATE_FILES[template]],
+        }
+
     @app.get("/api/diff/{run_id_a}/{run_id_b}")
     def diff(run_id_a: str, run_id_b: str):
         """Structured diff between two runs."""

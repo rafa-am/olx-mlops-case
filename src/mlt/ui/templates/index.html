@@ -415,6 +415,7 @@ input[type=checkbox] { width: 14px; height: 14px; cursor: pointer; accent-color:
     <a href="#/runs" data-page="runs">Runs</a>
     <a href="#/compare" data-page="compare">Compare</a>
     <a href="#/serve" data-page="serve">Serve</a>
+    <a href="#/new" data-page="new">New project</a>
   </nav>
 
   <hr class="sb-sep">
@@ -576,6 +577,9 @@ async function route() {
   } else if (path === '/serve') {
     setActivePage('serve');
     renderServe();
+  } else if (path === '/new') {
+    setActivePage('new');
+    renderNewProject();
   } else {
     setActivePage('home');
     renderHome();
@@ -1304,7 +1308,7 @@ async function renderHome() {
           style="margin-bottom:10px">
         <div style="display:flex;gap:8px">
           <button class="btn btn-secondary" disabled aria-disabled="true">Open</button>
-          <button class="btn btn-secondary" disabled aria-disabled="true">New project</button>
+          <a href="#/new" class="btn btn-secondary">New project</a>
         </div>
         <p style="font-size:11px;color:var(--fg3);margin-top:8px">
           Switching projects via the UI is not yet supported — restart <code>mlt ui</code> with the new folder.
@@ -1479,11 +1483,13 @@ async function renderRunDetail(runId) {
       <div class="log-block">${escHtml(logLines.join('\n'))}</div>
     </div>` : ''}` : '';
 
-  // Actions (P2 — shown but disabled)
+  const canServe = m.status === 'succeeded';
   const actionsHtml = `
     <div class="detail-actions">
       <button class="btn btn-secondary" disabled aria-disabled="true">Verify reproducibility</button>
-      <button class="btn btn-primary" disabled aria-disabled="true">Serve this run</button>
+      ${canServe
+        ? `<button class="btn btn-primary" onclick="confirmStartServe('${escHtml(m.run_id)}');location.hash='#/serve'">Serve this run</button>`
+        : `<button class="btn btn-primary" disabled aria-disabled="true">Serve this run</button>`}
     </div>`;
 
   // Inputs card
@@ -1598,6 +1604,145 @@ async function renderCompare(preA, preB) {
   };
 
   await loadAndRender();
+}
+
+// ===================================================================
+// NEW PROJECT
+// ===================================================================
+
+// Static file list per template (mirrors _TEMPLATE_FILES in app.py).
+const _TEMPLATE_DEFS = {
+  iris: [
+    { name: 'model.py',          description: 'MLModel class (SklearnModel) ready for iris' },
+    { name: 'requirements.txt',  description: 'model dependencies' },
+    { name: 'params.yaml',       description: 'hyperparameters (optional)' },
+    { name: '.python-version',   description: 'pinned Python version' },
+    { name: '.gitignore',        description: 'excludes .mlt/, data/, .venv/' },
+    { name: 'data/iris.csv',     description: 'sample data' },
+  ],
+};
+
+function renderNewProject() {
+  _buildNewProjectView(null, null, null);
+}
+
+function _buildNewProjectView(selectedTemplate, result, errorMsg) {
+  const tmpl = selectedTemplate || 'iris';
+  const files = _TEMPLATE_DEFS[tmpl] || [];
+  const fileRows = files.map(f =>
+    `<tr><td style="font-family:var(--mono);font-size:12px">${escHtml(f.name)}</td>
+         <td style="font-size:12px;color:var(--fg2)">${escHtml(f.description)}</td></tr>`
+  ).join('');
+
+  const templatePills = Object.keys(_TEMPLATE_DEFS).map(t =>
+    `<span class="chip ${t === tmpl ? 'active' : ''}"
+      style="cursor:pointer" onclick="_selectTemplate('${t}')">${escHtml(t)}</span>`
+  ).join('') +
+  `<span class="chip" style="opacity:.45;cursor:not-allowed" title="P2 — not yet implemented">blank</span>`;
+
+  let resultHtml = '';
+  if (result) {
+    const createdRows = result.files.map(f =>
+      `<tr><td style="font-family:var(--mono);font-size:12px">${escHtml(f.name)}</td>
+           <td style="font-size:12px;color:var(--fg2)">${escHtml(f.description)}</td></tr>`
+    ).join('');
+    resultHtml = `
+      <div class="card" style="border-color:var(--success);margin-bottom:16px">
+        <div class="card-title" style="color:var(--success)">Project created</div>
+        <p style="font-size:13px;margin-bottom:12px;font-family:var(--mono)">${escHtml(result.directory)}</p>
+        <div class="table-wrap" style="margin-bottom:12px">
+          <table>
+            <thead><tr><th>File</th><th>Description</th></tr></thead>
+            <tbody>${createdRows}</tbody>
+          </table>
+        </div>
+        <p style="font-size:12px;color:var(--fg3)">
+          Restart <code>mlt ui ${escHtml(result.directory)}</code> to open this project.
+        </p>
+      </div>`;
+  }
+
+  const errorHtml = errorMsg
+    ? `<div style="color:var(--fail);font-size:13px;margin-bottom:12px">${escHtml(errorMsg)}</div>` : '';
+
+  $('#main').innerHTML = `
+    <h1 class="page-title">New project</h1>
+    <p class="page-sub">Create a new mlt project from a template.</p>
+
+    ${resultHtml}
+
+    <div class="detail-grid">
+      <div class="card" style="margin-bottom:0">
+        <div class="card-title">Settings</div>
+
+        <label style="font-size:12px;color:var(--fg3);display:block;margin-bottom:4px">Folder (absolute path)</label>
+        <input type="text" id="new-proj-dir" placeholder="/home/user/my-project"
+          value="" style="margin-bottom:14px">
+
+        <div style="font-size:12px;color:var(--fg3);margin-bottom:6px">Template</div>
+        <div class="filter-chips" style="margin-bottom:16px">${templatePills}</div>
+
+        ${errorHtml}
+        <button class="btn btn-primary" id="create-proj-btn" onclick="_doCreateProject()">
+          Create project
+        </button>
+      </div>
+
+      <div class="card" style="margin-bottom:0">
+        <div class="card-title">Files that will be created</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>File</th><th>Description</th></tr></thead>
+            <tbody id="new-proj-files">${fileRows}</tbody>
+          </table>
+        </div>
+        <p style="font-size:12px;color:var(--fg3);margin-top:12px">
+          After creation: <code>mlt train &lt;folder&gt;</code> to train, or restart
+          <code>mlt ui &lt;folder&gt;</code> to open it here.
+        </p>
+      </div>
+    </div>`;
+
+  // Store current template selection so _doCreateProject can read it.
+  window._newProjTemplate = tmpl;
+}
+
+function _selectTemplate(tmpl) {
+  const dir = ($('#new-proj-dir') || {}).value || '';
+  _buildNewProjectView(tmpl, null, null);
+  // Restore whatever the user typed.
+  const inp = $('#new-proj-dir');
+  if (inp) inp.value = dir;
+  window._newProjTemplate = tmpl;
+}
+
+async function _doCreateProject() {
+  const dir = (($('#new-proj-dir') || {}).value || '').trim();
+  const tmpl = window._newProjTemplate || 'iris';
+
+  if (!dir) {
+    _buildNewProjectView(tmpl, null, 'Folder path is required.');
+    return;
+  }
+
+  const btn = $('#create-proj-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Creating…'; }
+
+  try {
+    const r = await fetch('/api/init', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ directory: dir, template: tmpl }),
+    });
+    const data = await r.json();
+    if (!r.ok) {
+      _buildNewProjectView(tmpl, null, data.detail || `Error ${r.status}`);
+      return;
+    }
+    _buildNewProjectView(tmpl, data, null);
+  } catch (e) {
+    _buildNewProjectView(tmpl, null, String(e));
+  }
 }
 
 function renderCompareView(runs, selA, selB, diffData) {
