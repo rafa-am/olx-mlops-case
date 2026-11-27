@@ -339,7 +339,7 @@ Supported types: `int`, `float`, `str`. Optional constraints: `min`, `max`, `all
 | `mlt runs list` | Last 20 runs (run_id, status, duration, metrics, fingerprint); `--all` |
 | `mlt runs show <run_id>` | Full run detail; `latest` and unique prefix accepted |
 | `mlt diff <a> <b>` | What changed between two runs |
-| `mlt verify <run_id>` | Retrain from the run's own snapshot and compare metrics |
+| `mlt verify <run_id>` | Retrain from the run's own snapshot and compare metrics; `--runner`, `--verbose` |
 | `mlt serve <run_id>` | Start the inference API; `--port 8000`, `--host 127.0.0.1` |
 | `mlt ui [folder]` | Open the local Web UI for the project — **experimental** (see below) |
 
@@ -414,6 +414,7 @@ Re-trains the model from scratch using exactly what the run stored — its own `
 
 ```bash
 mlt verify 20261125-143000-a1b2c3
+mlt verify 20261125-143000-a1b2c3 --verbose   # stream build and training logs in real time
 ```
 
 Exit 0 means reproduced; exit 4 means the metrics diverged beyond tolerance. The verification itself is recorded as a new run marked with `verification_of: <original_run_id>` — it appears in `mlt runs list` but is not a training run.

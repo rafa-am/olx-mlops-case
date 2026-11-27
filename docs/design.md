@@ -180,7 +180,7 @@ Inferred schema: from `feature_names_in_` of the trained model (sklearn with Dat
 | `mlt train [folder]` | trains and records a run |
 | `mlt runs list` / `mlt runs show <run_id>` | lists and details runs (`--json` optional) |
 | `mlt diff <a> <b>` | what changed between two runs |
-| `mlt verify <run_id>` | retrains and compares; refuses if data changed |
+| `mlt verify <run_id>` | retrains and compares; refuses if data changed; `--runner`, `--verbose` streams build and training logs |
 | `mlt serve <run_id>` (or `latest`) | starts the API in the foreground (`--port`, `--host`); `--detach` is P2, not implemented |
 | `mlt ps` / `mlt stop <run_id>` / `mlt logs <run_id>` | service management (P2, not implemented) |
 | `mlt ui [folder]` | local Web UI — experimental, v0.3.0 |
