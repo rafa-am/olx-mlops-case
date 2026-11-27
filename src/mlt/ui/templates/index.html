@@ -714,7 +714,6 @@ function buildTrainView(params, trainStatus) {
     <table class="kv" style="margin-bottom:0">
       ${kvRows([
         ['python', `${S.settings.python_requested} (${S.settings.python_source})`],
-        ['seed',   `${S.settings.seed} (${S.settings.seed_source})`],
       ])}
     </table>` : '<p style="color:var(--fg3)">—</p>';
 
@@ -796,6 +795,14 @@ function buildTrainView(params, trainStatus) {
           <div style="font-size:12px;color:var(--fg3);margin-bottom:6px">Runner</div>
           <div class="filter-chips" style="margin-bottom:0">${runnerPills}</div>
         </div>
+        <div>
+          <div style="font-size:12px;color:var(--fg3);margin-bottom:6px">
+            Seed <span style="font-weight:400">(default: ${escHtml(String(S.settings?.seed ?? '—'))} from ${escHtml(S.settings?.seed_source ?? '—')})</span>
+          </div>
+          <input type="number" id="seed-input" placeholder="leave blank to use default"
+            value="" min="0" ${running ? 'disabled' : ''}
+            style="width:220px;font-family:var(--mono);font-size:12px">
+        </div>
         <div style="display:flex;align-items:center;gap:8px;padding-top:22px">
           <input type="checkbox" id="force-checkbox" ${running ? 'disabled' : ''}>
           <label for="force-checkbox" style="font-size:13px;cursor:pointer">
@@ -838,6 +845,8 @@ async function confirmTrain() {
   const params = collectParams();
   const runner = _selectedTrainRunner();
   const force  = !!($('#force-checkbox')?.checked);
+  const seedRaw = ($('#seed-input')?.value || '').trim();
+  const seed = seedRaw !== '' ? parseInt(seedRaw, 10) : (S.settings?.seed ?? null);
   const paramsPreview = Object.keys(params).length
     ? Object.entries(params).map(([k, v]) => `${k}: ${v}`).join('\n')
     : null;
@@ -863,7 +872,7 @@ async function confirmTrain() {
         runner,
         force,
         python: S.settings?.python_requested || null,
-        seed:   S.settings?.seed ?? null,
+        seed,
       }),
     });
     // Re-render immediately so the status card appears
