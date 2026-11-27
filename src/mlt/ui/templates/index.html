@@ -562,21 +562,6 @@ async function renderHome() {
     </div>`;
   }
 
-  // About card (closeable)
-  const aboutCard = `<div class="card" id="about-card">
-    <div style="display:flex;justify-content:space-between;align-items:flex-start">
-      <div>
-        <div style="font-size:15px;margin-bottom:6px">
-          <b style="font-family:var(--mono)">mlt</b> · <b>Model Lifecycle Toolkit</b>
-          <span style="color:var(--fg3);font-weight:400"> version ${S.meta.version}</span>
-        </div>
-        <p style="font-size:13px;color:var(--fg2);max-width:720px">${S.meta.description}</p>
-      </div>
-      <button class="btn btn-ghost" style="flex-shrink:0;margin-left:16px"
-        onclick="document.getElementById('about-card').remove()">Close</button>
-    </div>
-  </div>`;
-
   // Counts
   const totalRuns = runs.length;
   const lastRunLine = last
@@ -586,9 +571,12 @@ async function renderHome() {
 
   $('#main').innerHTML = `
     <h1 class="page-title">Home</h1>
-    <p class="page-sub">Where you left off in the open project.</p>
+    <p class="page-sub">
+      <b style="font-family:var(--mono)">mlt</b> · <b>Model Lifecycle Toolkit</b>
+      <span style="font-weight:400;color:var(--fg3)"> version ${S.meta.version}</span>
+      &nbsp;—&nbsp;${S.meta.description}
+    </p>
 
-    ${aboutCard}
     ${nextHtml}
 
     <div class="home-grid">
