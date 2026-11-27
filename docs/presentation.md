@@ -21,6 +21,11 @@ Estrutura: 30 min de apresentação + 30 min de perguntas e discussão.
 Executar na ordem. Ter um terminal limpo com `mlt` instalado e nenhum projeto em `/tmp/demo` antes de começar.
 
 ```bash
+# 0. Confirmar instalação (30 s)
+mlt --version
+# Mostra: versão, Python do host, Docker detectado — confirma que está tudo pronto
+# Ponto de fala: "instalado via pipx num ambiente isolado no host; pipx install ."
+
 # 1. Criar projeto (1 min)
 mlt init /tmp/demo --template iris
 cd /tmp/demo
