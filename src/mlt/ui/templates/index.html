@@ -1687,10 +1687,12 @@ function _buildNewProjectView(selectedTemplate, result, errorMsg, templates) {
             <tbody id="new-proj-files">${fileRows}</tbody>
           </table>
         </div>
-        <p style="font-size:12px;color:var(--fg3);margin-top:12px">
-          After creation: <code>mlt train &lt;folder&gt;</code> to train, or restart
-          <code>mlt ui &lt;folder&gt;</code> to open it here.
-        </p>
+        <div style="border-left:3px solid var(--sb-text2,#7ea89e);padding:8px 12px;
+            margin-top:12px;font-size:12px;color:var(--fg2)">
+          After creation, run <code>mlt train &lt;folder&gt;</code> to train from the CLI,
+          or restart the UI with <code>mlt ui &lt;folder&gt;</code> to open it here
+          — the UI serves one project at a time.
+        </div>
       </div>
     </div>`;
 
