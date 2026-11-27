@@ -59,7 +59,7 @@ flowchart TD
 ```mermaid
 flowchart LR
     subgraph CLI [src/mlt/cli]
-        TC[train_cmd] & SC[serve_cmd] & IC[init_cmd] & CC[check_cmd] & RC[runs_cmd] & DC[diff_cmd] & VC[verify_cmd]
+        TC[train_cmd] & SC[serve_cmd] & IC[init_cmd] & CC[check_cmd] & RC[runs_cmd] & DC[diff_cmd] & VC[verify_cmd] & UC[ui_cmd]
     end
 
     subgraph CORE [src/mlt/core]
@@ -83,6 +83,10 @@ flowchart LR
         APP[app.py\ncreate_app] & SRV[server.py\nuvicorn entry point]
     end
 
+    subgraph UI [src/mlt/ui]
+        UIAPP[app.py\ncreate_ui_app\nFastAPI SPA]
+    end
+
     CLI --> CORE
     CORE --> RUNNERS
     CORE --> STORE
@@ -90,6 +94,9 @@ flowchart LR
     SC -->|spawns subprocess| SERVING
     SERVING --> MODEL
     SERVING --> STORE
+    UC --> UI
+    UI --> CORE
+    UI --> STORE
 ```
 
 ### Run directory structure
@@ -153,10 +160,11 @@ flowchart LR
 
 | Core function | Returns | Used by |
 |---|---|---|
-| `runs.list_runs` / `describe_run` | `list[Manifest]` / `Manifest` | `runs_cmd` |
-| `diff.diff_runs` / `diff_runs_by_id` | `RunDiff` dataclass | `diff_cmd` |
-| `verify.verify_run` | `VerifyResult` dataclass | `verify_cmd` |
-| `settings.resolve_effective_settings` | `EffectiveSettings` dataclass | `train_cmd` |
+| `runs.list_runs` / `describe_run` | `list[Manifest]` / `Manifest` | `runs_cmd`, `ui` |
+| `diff.diff_runs` / `diff_runs_by_id` | `RunDiff` dataclass | `diff_cmd`, `ui` |
+| `verify.verify_run` | `VerifyResult` dataclass | `verify_cmd`, `ui` |
+| `trainer.train` | `run_id` (str) | `train_cmd`, `ui` (via `verify_run`) |
+| `settings.resolve_effective_settings` | `EffectiveSettings` dataclass | `train_cmd`, `ui` |
 | `project.open_project` | `Path` | `discovery.require_project_dir` |
 
 This boundary is enforced by `tests/test_core_isolation.py`, which asserts that none of these modules import `click`, `typer`, or `mlt.cli`.

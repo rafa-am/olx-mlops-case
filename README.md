@@ -47,7 +47,7 @@ Verify:
 
 ```bash
 mlt --version
-# mlt 0.1.0
+# mlt 0.3.0
 # python 3.10.12
 # docker: available, daemon running        # docker group configured
 # docker: available, daemon not responding  # no permission / daemon down
@@ -335,6 +335,7 @@ Supported types: `int`, `float`, `str`. Optional constraints: `min`, `max`, `all
 | `mlt diff <a> <b>` | What changed between two runs |
 | `mlt verify <run_id>` | Retrain from the run's own snapshot and compare metrics |
 | `mlt serve <run_id>` | Start the inference API; `--port 8000`, `--host 127.0.0.1` |
+| `mlt ui [folder]` | Open the local Web UI for the project (defaults to current directory) |
 
 **Run ID shortcuts:** every command that takes a `run_id` also accepts `latest` and any unique prefix (like `git`).
 

@@ -401,7 +401,7 @@ Git repository accessible; README with end-to-end example; `DECISIONS.md`; `AI_U
 
 ## 17. Out of scope and evolution
 
-Out of scope: authentication, data versioning, rollback and A/B, monitoring and drift, GPU, distributed training, UI, CPU and memory limits, old run cleanup, API route versioning, data statistics in the manifest.
+Out of scope: authentication, data versioning, rollback and A/B, monitoring and drift, GPU, distributed training, CPU and memory limits, old run cleanup, API route versioning, data statistics in the manifest. (Local Web UI delivered as v0.3.0.)
 
 Evolution, in order:
 
