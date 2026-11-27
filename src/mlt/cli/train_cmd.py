@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import os
+import sys
+import threading
+import time
 from pathlib import Path
 
 import click
@@ -30,7 +33,7 @@ from mlt.cli.discovery import require_project_dir
 @click.option("--force", is_flag=True, default=False,
               help="Re-train even if an identical run already exists.")
 @click.option("--verbose", is_flag=True, default=False,
-              help="Print the training log to the terminal after training.")
+              help="Stream the training log to the terminal in real time.")
 def train_cmd(
     directory: str,
     data_dir: str | None,
@@ -73,6 +76,46 @@ def train_cmd(
 
     click.echo("  training...")
 
+    # When --verbose: start a background thread that tails train.log as soon
+    # as the run record is created (on_run_created fires before the worker
+    # starts, so the log file exists by the time the thread begins reading).
+    _stop_tail = threading.Event()
+    _tail_thread: threading.Thread | None = None
+
+    def _on_run_created(rid: str) -> None:
+        nonlocal _tail_thread
+        if not verbose:
+            return
+        log_path = project_dir / ".mlt" / "runs" / rid / "train.log"
+        click.echo()
+        click.echo("--- train.log ---")
+
+        def _tail() -> None:
+            # Wait for the file to appear (runner creates it just before the
+            # worker; there is usually no delay, but be safe).
+            deadline = time.monotonic() + 5.0
+            while not log_path.exists() and time.monotonic() < deadline:
+                time.sleep(0.05)
+            try:
+                with log_path.open(encoding="utf-8", errors="replace") as fh:
+                    while not _stop_tail.is_set():
+                        chunk = fh.read(4096)
+                        if chunk:
+                            sys.stdout.write(chunk)
+                            sys.stdout.flush()
+                        else:
+                            time.sleep(0.1)
+                    # Drain any remaining output after training finishes.
+                    remainder = fh.read()
+                    if remainder:
+                        sys.stdout.write(remainder)
+                        sys.stdout.flush()
+            except OSError:
+                pass  # log file disappeared (e.g. run removed on exit 3)
+
+        _tail_thread = threading.Thread(target=_tail, daemon=True)
+        _tail_thread.start()
+
     from mlt.core.trainer import train
 
     run_id = train(
@@ -85,7 +128,13 @@ def train_cmd(
         force=force,
         env=os.environ,
         on_slow_build=_on_slow_build,
+        on_run_created=_on_run_created,
     )
+
+    # Stop the tail thread and wait for it to drain.
+    _stop_tail.set()
+    if _tail_thread is not None:
+        _tail_thread.join(timeout=2.0)
 
     # Load the manifest to show the summary.
     from mlt.runstore.store import RunStore
@@ -111,9 +160,3 @@ def train_cmd(
     click.echo(f"  mlt runs show {run_id}")
     click.echo(f"  mlt serve {run_id}")
 
-    if verbose:
-        log_path = store.run_dir(run_id) / "train.log"
-        if log_path.exists():
-            click.echo()
-            click.echo("--- train.log ---")
-            click.echo(log_path.read_text(encoding="utf-8", errors="replace"))
