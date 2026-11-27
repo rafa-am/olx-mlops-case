@@ -1306,10 +1306,11 @@ function clearServePoll() {
 async function renderHome() {
   $('#main').innerHTML = '<div id="loading-state">Loading…</div>';
 
-  let runs = [], trainStatus = { status: 'idle' };
-  const [runsResult, trainResult] = await Promise.allSettled([
+  let runs = [], trainStatus = { status: 'idle' }, serveStatus = { status: 'idle' };
+  const [runsResult, trainResult, serveResult] = await Promise.allSettled([
     api('/api/runs?limit=20'),
     api('/api/train/status'),
+    api('/api/serve/status'),
     S.settings ? Promise.resolve() : api('/api/project/settings').then(s => { S.settings = s; }).catch(() => {}),
     S.system   ? Promise.resolve() : api('/api/system').then(s => {
       S.system = s;
@@ -1319,8 +1320,9 @@ async function renderHome() {
       if (pythonEl) pythonEl.textContent = s.python;
     }).catch(() => {}),
   ]);
-  if (runsResult.status === 'fulfilled') runs = runsResult.value;
+  if (runsResult.status  === 'fulfilled') runs        = runsResult.value;
   if (trainResult.status === 'fulfilled') trainStatus = trainResult.value;
+  if (serveResult.status === 'fulfilled') serveStatus = serveResult.value;
   const last = runs[0];
 
   let nextHtml = '';
@@ -1390,7 +1392,11 @@ async function renderHome() {
             ['training',  trainStatus.status === 'running'
               ? `<a href="#/train" style="color:var(--warn)">running — ${trainStatus.run_id ? escHtml(trainStatus.run_id) : 'starting…'}</a>`
               : 'none in progress'],
-            ['service',   'none in progress'],
+            ['service',   serveStatus.status === 'running'
+              ? `<a href="#/serve" style="color:var(--success)">running — ${escHtml(serveStatus.url || '')}</a>`
+              : serveStatus.status === 'starting'
+              ? `<a href="#/serve" style="color:var(--warn)">starting…</a>`
+              : 'none in progress'],
           ])}
         </table>
         <div style="margin-top:12px">
